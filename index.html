@@ -917,10 +917,25 @@ if (typeof document !== 'undefined') {
     }
     C.push({ k: 'URL', s: /https?:\/\//.test(joined) ? 'ok' : 'warn', d: /https?:\/\//.test(joined) ? '✓' : (es ? 'sin enlace' : 'missing') });
     const d0 = curData();
-    let dd = null; try { dd = Math.floor((Date.now() - new Date(d0.timestamp).getTime()) / 864e5); } catch (e) {}
+    // Frescura en SESIONES de mercado (L-V), no en días naturales:
+    // el lunes por la mañana, el dato del viernes es el más fresco posible.
+    let sess = null;
+    try {
+      const dt = new Date(d0.timestamp);
+      const day0 = Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth(), dt.getUTCDate());
+      const now = new Date();
+      const day1 = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+      sess = 0;
+      for (let t = day0 + 864e5; t <= day1; t += 864e5) {
+        const wd = new Date(t).getUTCDay();
+        if (wd !== 0 && wd !== 6) sess++;          // cuenta solo L-V
+      }
+    } catch (e) {}
     C.push({ k: es ? 'DATOS' : 'DATA',
-      s: dd === 0 ? 'ok' : dd === 1 ? 'warn' : 'bad',
-      d: dd === 0 ? (es ? 'HOY' : 'TODAY') : dd === 1 ? (es ? 'AYER' : '1D OLD') : `${dd ?? '?'}D` });
+      s: sess === 0 || sess === 1 ? 'ok' : sess === 2 ? 'warn' : 'bad',
+      d: sess === 0 ? (es ? 'HOY' : 'TODAY')
+       : sess === 1 ? (es ? 'ÚLT. SESIÓN' : 'LAST SESSION')
+       : `${sess ?? '?'} ${es ? 'SESIONES' : 'SESSIONS'}` });
     const gaps = /\bNaN\b|\bundefined\b/.test(joined) || /[^\w]— (?:vs|\/)/.test(joined);
     C.push({ k: es ? 'CAMPOS' : 'FIELDS', s: gaps ? 'warn' : 'ok', d: gaps ? (es ? 'huecos' : 'gaps') : '✓' });
     C.push({ k: es ? 'FUENTE' : 'SOURCE',
