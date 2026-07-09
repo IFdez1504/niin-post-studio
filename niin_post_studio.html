@@ -1,0 +1,1063 @@
+<!--
+  ═══════════════════════════════════════════════════════════════════════
+  NIIN POST STUDIO · Social Signal Generator
+  Generador de posts (LinkedIn / X) desde los outputs de NIIN Analytics.
+
+  · Archivo único, sin dependencias ni build. Abrir en un navegador.
+  · No contiene lógica del oráculo: solo consume niin_live.json / _en.json
+  · Datos demo embebidos; se sustituyen al pulsar FETCH JSON.
+  · Preferencias (URL, dashboard, hashtags, plantilla, idioma, iconografía)
+    se guardan en localStorage del navegador, no en este archivo.
+
+  Logo: buscar "LOGO NIIN" para reemplazarlo.
+  © 2026 Israel Fernández · NIIN Analytics. Todos los derechos reservados.
+  ═══════════════════════════════════════════════════════════════════════
+-->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NIIN POST STUDIO · Social Signal Generator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-void: #050708;
+    --bg-base: #0a0d10;
+    --bg-surface: #0e1216;
+    --bg-raised: #141a20;
+    --bg-line: #10151a;
+    --line-dim: #1d242c;
+    --line-mid: #2b343e;
+    --tx-1: #e9edf1;
+    --tx-2: #a9b3bd;
+    --tx-3: #6c7681;
+    --tx-4: #47515b;
+    --safe: #10b981;
+    --safe-bg: rgba(16,185,129,.08);
+    --critical: #ef4444;
+    --critical-deep: #dc2626;
+    --critical-bg: rgba(239,68,68,.08);
+    --caution: #f59e0b;
+    --caution-bg: rgba(245,158,11,.08);
+    --model: #8b5cf6;
+    --model-bg: rgba(139,92,246,.10);
+    --ui: #6366f1;
+    --ui-bg: rgba(99,102,241,.10);
+    --f-mono: 'IBM Plex Mono', monospace;
+    --f-sans: 'Inter', system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--bg-void); color: var(--tx-1); font-family: var(--f-mono); }
+  ::selection { background: var(--model); color: #fff; }
+
+  .lbl { font-size: 9px; letter-spacing: .22em; text-transform: uppercase; color: var(--tx-3); }
+  .lbl-4 { font-size: 8.5px; letter-spacing: .2em; text-transform: uppercase; color: var(--tx-4); }
+
+  .logo-h { height: 22px; width: 71px; color: var(--tx-1); display: block; }
+  .logo-f { height: 13px; width: 42px; color: var(--tx-3); opacity: .55; display: block; }
+
+  /* ======== TOP BAR ======== */
+  header {
+    display: flex; align-items: center; gap: 14px;
+    padding: 10px 18px; background: var(--bg-void);
+    border-bottom: 1px solid var(--line-dim);
+    flex-wrap: wrap;
+  }
+  .brand { display: flex; align-items: baseline; gap: 10px; }
+  .brand b { font-size: 14px; font-weight: 700; letter-spacing: .18em; }
+  .brand span { font-size: 9px; letter-spacing: .22em; color: var(--tx-3); }
+  .tape { display: flex; gap: 1px; background: var(--line-dim); border: 1px solid var(--line-dim); margin-left: auto; flex-wrap: wrap; }
+  .chip { background: var(--bg-surface); padding: 5px 12px; display: flex; flex-direction: column; gap: 2px; min-width: 78px; }
+  .chip .k { font-size: 7.5px; letter-spacing: .2em; color: var(--tx-4); text-transform: uppercase; }
+  .chip .v { font-size: 12px; font-weight: 700; letter-spacing: .04em; }
+
+  /* ======== LAYOUT ======== */
+  .studio { display: grid; grid-template-columns: 320px 1fr; gap: 1px; background: var(--line-dim); border-bottom: 1px solid var(--line-dim); min-height: calc(100vh - 54px); }
+  @media (max-width: 900px) { .studio { grid-template-columns: 1fr; } }
+
+  /* ======== SIDEBAR ======== */
+  aside { background: var(--bg-base); }
+  .panel { border-bottom: 1px solid var(--line-dim); }
+  .panel-h { display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; background: var(--bg-line); border-bottom: 1px solid var(--line-dim); }
+  .panel-b { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+
+  .seg { display: flex; gap: 1px; background: var(--line-dim); border: 1px solid var(--line-dim); }
+  .seg button { flex: 1; background: var(--bg-surface); border: 0; color: var(--tx-3); font-family: var(--f-mono); font-size: 9px; letter-spacing: .14em; text-transform: uppercase; padding: 8px 4px; cursor: pointer; transition: all .15s; }
+  .seg button:hover { color: var(--tx-1); background: var(--bg-raised); }
+  .seg button.on { background: var(--model-bg); color: var(--model); font-weight: 700; box-shadow: inset 0 -2px 0 var(--model); }
+
+  .tmpl { display: flex; flex-direction: column; gap: 1px; background: var(--line-dim); border: 1px solid var(--line-dim); }
+  .tmpl button { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; background: var(--bg-surface); border: 0; padding: 10px 12px; cursor: pointer; text-align: left; transition: background .15s; }
+  .tmpl button:hover { background: var(--bg-raised); }
+  .tmpl button.on { background: var(--model-bg); box-shadow: inset 2px 0 0 var(--model); }
+  .tmpl .t1 { font-family: var(--f-mono); font-size: 10.5px; font-weight: 700; letter-spacing: .1em; color: var(--tx-1); text-transform: uppercase; }
+  .tmpl button.on .t1 { color: var(--model); }
+  .tmpl .t2 { font-family: var(--f-mono); font-size: 8.5px; letter-spacing: .04em; color: var(--tx-3); line-height: 1.5; }
+
+  .tog { display: flex; align-items: center; justify-content: space-between; gap: 8px; cursor: pointer; padding: 6px 0; border-bottom: 1px dashed var(--line-dim); }
+  .tog:last-child { border-bottom: 0; }
+  .tog span { font-size: 9.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--tx-2); }
+  .sw { width: 30px; height: 14px; border: 1px solid var(--line-mid); background: var(--bg-void); position: relative; flex-shrink: 0; transition: all .15s; }
+  .sw::after { content: ''; position: absolute; top: 2px; left: 2px; width: 8px; height: 8px; background: var(--tx-4); transition: all .15s; }
+  .tog.on .sw { border-color: var(--safe); background: var(--safe-bg); }
+  .tog.on .sw::after { left: 18px; background: var(--safe); }
+
+  input[type=text], textarea.src {
+    width: 100%; background: var(--bg-void); border: 1px solid var(--line-dim); color: var(--tx-1);
+    font-family: var(--f-mono); font-size: 10px; padding: 8px 10px; letter-spacing: .02em;
+  }
+  input[type=text]:focus, textarea.src:focus { outline: none; border-color: var(--model); }
+  textarea.src { min-height: 70px; resize: vertical; }
+
+  .btn { background: var(--bg-surface); border: 1px solid var(--line-mid); color: var(--tx-2); font-family: var(--f-mono); font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; padding: 8px 12px; cursor: pointer; transition: all .15s; }
+  .btn:hover { border-color: var(--model); color: var(--model); }
+  .btn.primary { border-color: var(--model); background: var(--model-bg); color: var(--model); font-weight: 700; }
+  .btn.primary:hover { background: var(--model); color: #fff; }
+  .btn.ok { border-color: var(--safe); background: var(--safe-bg); color: var(--safe); }
+
+  .file-drop { border: 1px dashed var(--line-mid); padding: 10px; text-align: center; font-size: 9px; letter-spacing: .1em; color: var(--tx-3); cursor: pointer; text-transform: uppercase; transition: all .15s; }
+  .file-drop:hover { border-color: var(--model); color: var(--model); }
+  #status { font-size: 9px; letter-spacing: .08em; line-height: 1.6; }
+  .st-ok { color: var(--safe); }
+  .st-err { color: var(--critical); }
+
+  /* ======== MAIN OUTPUT ======== */
+  main { background: var(--bg-base); display: flex; flex-direction: column; }
+  .out-h { display: flex; align-items: center; gap: 12px; padding: 10px 18px; background: var(--bg-line); border-bottom: 1px solid var(--line-dim); flex-wrap: wrap; }
+  .out-h .grow { flex: 1; }
+  .count { font-size: 10px; font-weight: 700; letter-spacing: .06em; }
+  .count.warn { color: var(--caution); }
+  .count.over { color: var(--critical); }
+  .count.ok { color: var(--safe); }
+
+  #cards { padding: 16px 18px 40px; display: flex; flex-direction: column; gap: 14px; overflow-y: auto; }
+  .card { background: var(--bg-surface); border: 1px solid var(--line-dim); }
+  .card-h { display: flex; align-items: center; gap: 10px; padding: 8px 14px; background: var(--bg-line); border-bottom: 1px solid var(--line-dim); }
+  .card-h .tag { font-size: 8.5px; letter-spacing: .2em; text-transform: uppercase; color: var(--tx-4); }
+  .card-h .name { font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--model); }
+  .card-h .spacer { flex: 1; }
+  .card textarea {
+    width: 100%; background: transparent; border: 0; color: var(--tx-1);
+    font-family: var(--f-mono); font-size: 12px; line-height: 1.65; padding: 14px 16px;
+    resize: vertical; min-height: 60px; letter-spacing: .01em;
+  }
+  .card textarea:focus { outline: none; background: var(--bg-void); }
+  .copy { background: transparent; border: 1px solid var(--line-mid); color: var(--tx-3); font-family: var(--f-mono); font-size: 8.5px; letter-spacing: .16em; text-transform: uppercase; padding: 4px 10px; cursor: pointer; transition: all .15s; }
+  .copy:hover { border-color: var(--safe); color: var(--safe); }
+  .copy.done { border-color: var(--safe); background: var(--safe-bg); color: var(--safe); }
+
+  .valbar { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding: 7px 18px; background: var(--bg-void); border-bottom: 1px solid var(--line-dim); font-size: 9px; letter-spacing: .12em; text-transform: uppercase; }
+  .vc { color: var(--tx-4); } .vc b { font-weight: 700; letter-spacing: .06em; }
+  .vc.ok b { color: var(--safe); } .vc.warn b { color: var(--caution); } .vc.bad b { color: var(--critical); }
+  .vready { margin-left: auto; padding: 3px 10px; border: 1px solid; font-weight: 700; font-size: 9px; letter-spacing: .18em; }
+  .vready.ok { color: var(--safe); border-color: var(--safe); background: var(--safe-bg); }
+  .vready.warn { color: var(--caution); border-color: var(--caution); background: var(--caution-bg); }
+  .vready.bad { color: var(--critical); border-color: var(--critical); background: var(--critical-bg); }
+
+  .footer-note { padding: 10px 18px; border-top: 1px solid var(--line-dim); font-size: 8.5px; letter-spacing: .1em; color: var(--tx-4); text-transform: uppercase; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px; }
+
+  .sig-safe { color: var(--safe); } .sig-crit { color: var(--critical); } .sig-caut { color: var(--caution); }
+  .blink { animation: bl 1.4s steps(2) infinite; }
+  @keyframes bl { 50% { opacity: .25; } }
+  @media (prefers-reduced-motion: reduce) { .blink { animation: none; } }
+</style>
+</head>
+<body>
+<!-- ═══════════════════════════════════════════════════════════════
+     LOGO NIIN · Para cambiarlo en el futuro, sustituye SOLO el
+     contenido de este <symbol> por los paths de tu nuevo SVG y
+     actualiza el viewBox. Se refleja en cabecera y pie a la vez.
+     ═══════════════════════════════════════════════════════════════ -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="niin-logo" viewBox="0 0 980 303.5"><g id="Logo_Negro_1_">
+	<path fill="currentColor" d="M87.5,88.5l-0.5,215h215v-215H87.5z M264.6,266.1H123.7l0.3-140.9h140.5v140.9H264.6z"/>
+	<polyline fill="currentColor" points="66,67.5 217.5,67.5 217.5,0 0,0 0,217.5 66,217.5 	"/>
+</g>
+<rect x="144.3" y="145.8" fill="currentColor" width="72.6" height="71.1"/>
+<g id="NIIN_Negro_1_">
+	<rect x="619.3" y="89.5" fill="currentColor" width="45.3" height="155.3"/>
+	<polygon fill="currentColor" points="529.3,192.9 529.3,89.5 574.7,89.5 575,244.8 529,244.8 440,142.5 440,244.8 394,244.8 394.4,89.5 
+		440,89.5 	"/>
+	<rect x="709.3" y="89.5" fill="currentColor" width="45.3" height="155.3"/>
+	<polygon fill="currentColor" points="934.3,192.9 934.3,89.5 979.7,89.5 980,244.8 934,244.8 845,142.5 845,244.8 799,244.8 799.3,89.5 
+		845,89.5 	"/>
+</g></symbol>
+</svg>
+
+
+<header>
+  <div class="brand"><svg class="logo-h" role="img" aria-label="NIIN"><use href="#niin-logo"/></svg><span>POST STUDIO · SOCIAL SIGNAL GENERATOR</span></div>
+  <div class="tape" id="tape"></div>
+</header>
+
+<div class="studio">
+  <aside>
+    <!-- DATA SOURCE -->
+    <div class="panel">
+      <div class="panel-h"><span class="lbl">Fuente de datos</span><span class="lbl-4" id="src-badge">DEMO</span></div>
+      <div class="panel-b">
+        <input type="text" id="url" placeholder="URL raw de niin_live.json (se recordará la última que funcione)">
+        <div style="display:flex;gap:8px">
+          <button class="btn primary" style="flex:1" onclick="loadUrl()">Fetch JSON</button>
+          <label class="btn" style="flex:1;text-align:center">Subir archivo<input type="file" id="file" accept="application/json,text/plain,.json,.txt" multiple hidden></label>
+        </div>
+        <textarea class="src" id="paste" placeholder="…o pega aquí el contenido de niin_live.json"></textarea>
+        <button class="btn" onclick="loadPaste()">Cargar pegado</button>
+        <div id="status" class="st-ok">▮ Datos demo cargados (run 08/07/2026)</div>
+      </div>
+    </div>
+
+    <!-- PLATFORM + LANG -->
+    <div class="panel">
+      <div class="panel-h"><span class="lbl">Plataforma · Idioma</span></div>
+      <div class="panel-b">
+        <div class="seg" id="platform">
+          <button data-v="linkedin" class="on">LinkedIn</button>
+          <button data-v="xthread">X · Hilo</button>
+          <button data-v="xsingle">X · Único</button>
+        </div>
+        <div class="seg" id="lang">
+          <button data-v="es" class="on">Español</button>
+          <button data-v="en">English</button>
+        </div>
+        <span class="lbl-4" style="margin-top:2px">Iconografía</span>
+        <div class="seg" id="icons">
+          <button data-v="full" class="on">Emoji</button>
+          <button data-v="min">Mínima</button>
+          <button data-v="none">Tipográfica</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- TEMPLATE -->
+    <div class="panel">
+      <div class="panel-h"><span class="lbl">Plantilla</span></div>
+      <div class="panel-b" style="padding:10px 12px">
+        <div class="tmpl" id="tmpl">
+          <button data-v="daily" class="on"><span class="t1">Señal diaria</span><span class="t2">Dictamen, régimen, análogos, track record. El post estándar de cada sesión.</span></button>
+          <button data-v="deep"><span class="t1">Análisis extendido</span><span class="t2">Matriz macro completa, exposición sectorial, lección de análogos, performance 19Y.</span></button>
+          <button data-v="track"><span class="t1">Track record</span><span class="t2">Transparencia radical: aciertos, fallos, rachas y en qué regímenes falla el sistema.</span></button>
+          <button data-v="build"><span class="t1">Build in public</span><span class="t2">La historia del sistema: arquitectura, pipeline autónomo y por qué se publica el output.</span></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- SECTIONS -->
+    <div class="panel">
+      <div class="panel-h"><span class="lbl">Módulos incluidos</span></div>
+      <div class="panel-b" id="secs" style="gap:0"></div>
+    </div>
+
+    <!-- CONFIG -->
+    <div class="panel">
+      <div class="panel-h"><span class="lbl">Configuración</span></div>
+      <div class="panel-b">
+        <span class="lbl-4">URL del dashboard</span>
+        <input type="text" id="dashurl" value="https://niin-analytics.vercel.app">
+        <span class="lbl-4">Hashtags</span>
+        <input type="text" id="tags" value="#QuantFinance #RiskManagement #Python #MachineLearning">
+        <button class="btn primary" onclick="render()">⟳ Regenerar posts</button>
+      </div>
+    </div>
+  </aside>
+
+  <main>
+    <div class="out-h">
+      <span class="lbl" id="out-title">OUTPUT · LINKEDIN · SEÑAL DIARIA</span>
+      <div class="grow"></div>
+      <span class="count" id="out-count"></span>
+      <button class="btn ok" id="copy-all" onclick="copyAll(this)">Copiar todo</button>
+    </div>
+    <div class="valbar" id="valbar"></div>
+    <div id="cards"></div>
+    <div class="footer-note">
+      <span>Solo outputs del sistema · el algoritmo permanece propietario</span>
+      <span style="display:flex;align-items:center;gap:8px"><svg class="logo-f" aria-hidden="true"><use href="#niin-logo"/></svg>NIIN Analytics © 2026 Israel Fernández</span>
+    </div>
+  </main>
+</div>
+
+<script>
+const DEFAULT_DATA = {"run_context":{"niin_version":"5.0.0","module":"oracle","config_hash":"sha256:d7d8d942e496cb58563ba39a5cdea0f0289f4c7feb93391c7bc28bc44e305eb0","config_version":"5.0.0","features_active":["rolling_percentiles_5y","pipeline_latency_logging","hmm_gaussian_real_active"],"python_version":"3.11.15","platform":"Linux","run_timestamp_utc":"2026-07-08T01:14:49.571777+00:00","hmm_engine":"GaussianHMM","hmm_is_real":true},"timestamp":"2026-07-08T01:14:49.571733Z","version":"NIIN Analytics","z_score":-0.9314,"z_score_raw":-1.0828,"risk_status":"RISK_ON","confidence":{"level":"LOW","knn_score":0.908,"hmm_state":0,"hmm_label":"LOW_VOLATILITY","hmm_type":"GaussianHMM","hmm_state_probabilities":[1.0,0.0,0.0],"hmm_transition_prob_7d":[0.0044,0.9118,0.0838],"hmm_state_labels":["LOW_VOLATILITY","TRANSITION","SYSTEMIC_STRESS"]},"metrics":{"global_z_score_ewm":-0.9314,"global_z_score_raw":-1.0828,"vix_level":16.13,"spx":7503.85,"vix_mean":19.7657,"vix_std":8.6839,"hmm_state":0,"hmm_is_real":true,"knn_confidence":0.908,"regime":"ALCISTA","sma_200":6968.91},"system_drivers":[{"name":"Volatility","status":"STABLE","intensity":0.4},{"name":"System Stress (EWM)","status":"NOMINAL","intensity":0.0},{"name":"KNN Analog Confidence","status":"HIGH","intensity":0.91}],"action_node":{"type":"SYSTEM_SIGNAL_V5","message":"MANTENER EXPOSICIÓN. RIESGO CONTROLADO.","allocation":{"cash":0.0002,"risk":0.9998,"base_cash":0.0002,"hmm_premium":0.0,"knn_weight":0.9724,"allocation_method":"knn_weighted_sigmoid_v5"},"allocation_method":"knn_weighted_sigmoid_v5"},"analog_intelligence":[{"date":"2025-07-16","distance_mahal":3.2908,"distance_corr":0.2653,"distance_combined":0.244,"reference":"Market Friction Analog","market_behavior":"Statistical Anomaly Detection","analog_returns":{"spx_base":6263.7,"retorno_30d":3.48,"retorno_60d":7.82,"retorno_90d":6.04,"max_drawdown_intermedio":-0.41,"tendencia_post":"ALCISTA","nota":"Retornos calculados sobre dataset certificado SHA-256. Sesiones hábiles."},"narrativa":{"contexto_historico":"En julio de 2025, el mercado experimentaba fricciones significativas debido a factores económicos y geopolíticos, lo que llevó a una detección de anomalías estadísticas.","evolucion_posterior":"Después del análogo, el SPX mostró una tendencia alcista, con retornos reales del 3.48% en 30 sesiones, 7.82% en 60 sesiones y 6.04% en 90 sesiones.","leccion_actual":"La dinámica de este análogo sugiere que, en un régimen alcista, la superación de momentos de fricción puede estar seguida de una continuación de la tendencia alcista, lo que implica una posible consolidación y posterior avance del mercado."}},{"date":"2023-12-08","distance_mahal":3.4495,"distance_corr":0.3129,"distance_combined":0.2732,"reference":"Post-Inflation Normalization","market_behavior":"Rate Plateau / Equity Re-rating","analog_returns":{"spx_base":4604.37,"retorno_30d":5.34,"retorno_60d":11.44,"retorno_90d":9.94,"max_drawdown_intermedio":0.39,"tendencia_post":"ALCISTA","nota":"Retornos calculados sobre dataset certificado SHA-256. Sesiones hábiles."},"narrativa":{"contexto_historico":"En diciembre de 2023, el mercado experimentaba una normalización post-inflacionaria con un comportamiento de meseta en las tasas de interés y una revalorización de las acciones.","evolucion_posterior":"En los 90 días siguientes, el SPX mostró una evolución alcista con retornos reales del 5.34% en 30 sesiones, 11.44% en 60 sesiones y 9.94% en 90 sesiones.","leccion_actual":"Este análogo histórico sugiere que, en un régimen alcista, la dinámica de rate plateau y revalorización de las acciones puede impulsar una tendencia alcista sostenida en el mercado."}},{"date":"2017-03-10","distance_mahal":3.9664,"distance_corr":0.3327,"distance_combined":0.3006,"reference":"Market Friction Analog","market_behavior":"Statistical Anomaly Detection","analog_returns":{"spx_base":2372.6,"retorno_30d":-1.01,"retorno_60d":2.8,"retorno_90d":3.65,"max_drawdown_intermedio":-1.84,"tendencia_post":"LATERAL","nota":"Retornos calculados sobre dataset certificado SHA-256. Sesiones hábiles."},"narrativa":{"contexto_historico":"En marzo de 2017, el mercado experimentaba fricciones debido a la incertidumbre política y económica, lo que llevó a una detección de anomalías estadísticas.","evolucion_posterior":"Después de la fecha del análogo, el SPX mostró una evolución lateral en un principio, con un retorno de -1.01% en 30 sesiones, pero luego se recuperó con retornos del 2.8% y 3.65% en 60 y 90 sesiones, respectivamente.","leccion_actual":"La dinámica de este análogo sugiere que, incluso en un régimen alcista, el mercado puede experimentar periodos de consolidación lateral antes de continuar su tendencia ascendente, lo que implica que los inversores deben ser cautelosos y no sobrereactuar a las fluctuaciones a corto plazo."}},{"date":"2025-02-03","distance_mahal":4.3902,"distance_corr":0.3283,"distance_combined":0.3127,"reference":"Market Friction Analog","market_behavior":"Statistical Anomaly Detection","analog_returns":{"spx_base":5994.57,"retorno_30d":-5.33,"retorno_60d":-7.77,"retorno_90d":0.19,"max_drawdown_intermedio":-16.88,"tendencia_post":"LATERAL","nota":"Retornos calculados sobre dataset certificado SHA-256. Sesiones hábiles."},"narrativa":{"contexto_historico":"En febrero de 2025, el mercado experimentaba fricciones significativas, lo que llevó a la identificación de una anomalía estadística.","evolucion_posterior":"Después de la fecha de referencia, el SPX mostró una caída del 5.33% en 30 sesiones y del 7.77% en 60 sesiones, para luego recuperarse y cerrar con un retorno del 0.19% en 90 sesiones, caracterizando una tendencia lateral.","leccion_actual":"Este análogo histórico sugiere que, incluso en un régimen alcista, el mercado puede experimentar períodos de corrección y lateralidad antes de potencialmente reanudar su tendencia ascendente."}},{"date":"2009-12-14","distance_mahal":4.39,"distance_corr":0.3369,"distance_combined":0.317,"reference":"Post-Lehman Recovery","market_behavior":"Risk-On Recovery / Reflation","analog_returns":{"spx_base":1114.11,"retorno_30d":-1.97,"retorno_60d":2.36,"retorno_90d":8.35,"max_drawdown_intermedio":-5.15,"tendencia_post":"ALCISTA","nota":"Retornos calculados sobre dataset certificado SHA-256. Sesiones hábiles."},"narrativa":{"contexto_historico":"El mercado se encontraba en una fase de recuperación post-Lehman, caracterizada por una tendencia alcista y una reactivación de la economía.","evolucion_posterior":"El SPX experimentó una caída a corto plazo con un retorno de -1.97% en 30 sesiones, pero luego se recuperó con retornos de 2.36% y 8.35% en 60 y 90 sesiones respectivamente.","leccion_actual":"La dinámica de este análogo sugiere que, incluso en un régimen alcista, pueden ocurrir correcciones a corto plazo, pero la tendencia general puede seguir siendo positiva, lo que implica que los inversores deben mantener una perspectiva a largo plazo."}}],"historical_context":{"analog_dates":[{"date":"2025-07-16","distance_mahal":3.2908,"distance_corr":0.2653,"distance_combined":0.244,"reference":"Market Friction Analog","market_behavior":"Statistical Anomaly Detection"},{"date":"2023-12-08","distance_mahal":3.4495,"distance_corr":0.3129,"distance_combined":0.2732,"reference":"Post-Inflation Normalization","market_behavior":"Rate Plateau / Equity Re-rating"},{"date":"2017-03-10","distance_mahal":3.9664,"distance_corr":0.3327,"distance_combined":0.3006,"reference":"Market Friction Analog","market_behavior":"Statistical Anomaly Detection"},{"date":"2025-02-03","distance_mahal":4.3902,"distance_corr":0.3283,"distance_combined":0.3127,"reference":"Market Friction Analog","market_behavior":"Statistical Anomaly Detection"},{"date":"2009-12-14","distance_mahal":4.39,"distance_corr":0.3369,"distance_combined":0.317,"reference":"Post-Lehman Recovery","market_behavior":"Risk-On Recovery / Reflation"}],"knn_confidence":0.908,"distance_metric":"Mahalanobis+Correlation_50/50","pca_components":15,"exclusion_window":180},"dictamen_cuantitativo":{"REGIMEN_ACTUAL":"Estado HMM: LOW_VOLATILITY. Flujo de capital estable. Régimen de bajo riesgo.","ESTRES_SISTEMICO":"VIX: 16.13. Z-Score EWM: -0.931σ. Riesgo de cola controlado.","CONTEXTO_HISTORICO":"Análogos Mahalanobis: 3 alcistas, 2 laterales. Retornos reales certificados. Períodos de baja volatilidad.","CONFIANZA_KNN":"Confianza KNN: 0.908. Distancia media Mahalanobis: 3.89. Calidad de análogos alta.","DICTAMEN_OPERATIVO":"MANTENER EXPOSICIÓN. RIESGO CONTROLADO.","SINTESIS_ESTRATEGICA":"Mantener exposición en un entorno de bajo riesgo. El régimen actual de baja volatilidad y el control del riesgo de cola sugieren una estrategia de mantenimiento de posiciones. La confianza en los análogos históricos y la calidad de los retornos reales certificados respaldan esta decisión."},"deep_analysis":"Mantener exposición en un entorno de bajo riesgo. El régimen actual de baja volatilidad y el control del riesgo de cola sugieren una estrategia de mantenimiento de posiciones. La confianza en los análogos históricos y la calidad de los retornos reales certificados respaldan esta decisión.","matriz":[{"id":"ENERGIA","nombre":"Petróleo WTI","ticker":"CL=F","precio":71.83,"limite_dinamico":84.915,"percentil":75,"estado":"🟢 NOMINAL","inverse":false,"threshold_method":"dynamic_percentile"},{"id":"DIVISA","nombre":"Dólar Index","ticker":"DX-Y.NYB","precio":101.13,"limite_dinamico":104.72,"percentil":75,"estado":"🟢 NOMINAL","inverse":false,"threshold_method":"dynamic_percentile"},{"id":"TIPOS","nombre":"Bono USA 10Y","ticker":"^TNX","precio":4.529,"limite_dinamico":4.3742,"percentil":80,"estado":"🔴 CRÍTICO","inverse":false,"threshold_method":"dynamic_percentile"},{"id":"MATERIAS","nombre":"Oro","ticker":"GC=F","precio":4122.2002,"limite_dinamico":3221.075,"percentil":75,"estado":"🔴 CRÍTICO","inverse":false,"threshold_method":"dynamic_percentile"},{"id":"SPREAD","nombre":"HY Credit","ticker":"HYG","precio":null,"limite_dinamico":75.0,"percentil":25,"estado":"⚪ SIN DATOS","inverse":true,"threshold_method":"dynamic_percentile"},{"id":"DURATION","nombre":"Long Duration","ticker":"TLT","precio":null,"limite_dinamico":90.0,"percentil":25,"estado":"⚪ SIN DATOS","inverse":true,"threshold_method":"dynamic_percentile"}],"alertas_activas":["Bono USA 10Y","Oro"],"exposure_ranking":[{"sector":"Minería / Materias P.","score":100.0,"nivel":"🟡 MEDIO","impacto":"Ciclo de commodities.","accion":"Ajuste de producción."},{"sector":"Utilities","score":58.8,"nivel":"🟡 MEDIO","impacto":"Alta carga de deuda financiera.","accion":"Reestructuración de deuda."},{"sector":"Construcción / R.E.","score":58.8,"nivel":"🟡 MEDIO","impacto":"Dependencia total de financiación.","accion":"Revisión de pipeline."},{"sector":"Tecnología","score":51.2,"nivel":"🟡 MEDIO","impacto":"Sensibilidad a tipos y capital.","accion":"Optimización de estructura."},{"sector":"Consumo Discrecional","score":39.9,"nivel":"🟡 MEDIO","impacto":"Sensibilidad a crédito y precios.","accion":"Ajuste de márgenes."},{"sector":"Industria Pesada","score":25.9,"nivel":"🟡 MEDIO","impacto":"Energía intensiva + financiación.","accion":"Revisión de CAPEX."},{"sector":"Banca / Financiero","score":25.0,"nivel":"🟡 MEDIO","impacto":"Margen de interés + crédito.","accion":"Monitorización de mora."},{"sector":"Retail Importador","score":21.1,"nivel":"🟢 BAJO","impacto":"Dependencia del dólar.","accion":"Cobertura de divisa."},{"sector":"Aerolíneas","score":11.8,"nivel":"🟢 BAJO","impacto":"Coste de combustible crítico.","accion":"Evaluar coberturas de fuel."},{"sector":"Transporte / Logística","score":0.0,"nivel":"🟢 BAJO","impacto":"Presión en márgenes logísticos.","accion":"Optimización de rutas."}],"orden_corporativa":"RÉGIMEN NOMINAL. RIESGO SISTÉMICO CONTROLADO.","informe":{"PULSO_SISTEMICO":"Mercados financieros en régimen nominal con control del riesgo sistémico.","SENAL_NIIN":"ESTABILIDAD NOMINAL","ANALISIS_IA":{"dinamica_z_score":"El Z-Score EWM se encuentra en -0.931σ, indicando una ligera contracción en el riesgo sistémico.","umbrales_dinamicos":"Los umbrales dinámicos activos muestran que el Bono USA 10Y y el Oro están en niveles críticos, mientras que el Petróleo WTI y el Dólar Index se encuentran dentro de los umbrales nominales.","conclusion_fortaleza":"El sistema NIIN Analytics muestra consistencia en la evaluación del riesgo, con un enfoque en la estabilidad nominal.","evolucion_cfo_fase_1":"En T-1, el riesgo sistémico se encontraba en -0.898σ, lo que indica una ligera disminución en el riesgo en T.","evolucion_cfo_fase_2":"El impacto real en Tesorería y Flujo de Caja se ve minimizado gracias a la estabilidad nominal de los mercados.","resumen_ejecutivo":"El sistema NIIN Analytics demuestra robustez ante la gestión de activos, con un enfoque en la estabilidad nominal y el control del riesgo sistémico.","racional_completo":"La estrategia en T vs T-1 se centra en mantener la estabilidad nominal, con un enfoque en la gestión de activos y la minimización del riesgo sistémico."}},"auditoria_mercado":{"fecha_t_minus_1":"2026-07-07","z_score_prev":-0.8978,"delta_z":-0.0336,"cambios_exposicion":[{"s":"Utilities","d":2.4},{"s":"Construcción / R.E.","d":2.4},{"s":"Retail Importador","d":-1.6}],"momentum":"contracción_riesgo"},"niin_accuracy":{"status":"active","days_tracked":34,"accuracy_score":64.7,"aciertos":22,"fallos":12,"current_streak":2,"max_streak":8,"confidence_level":"🟡 FIABILIDAD MEDIA","metrica":"postura_vs_retorno_spx","last_session":{"date":"2026-07-07","postura_ayer":"RISK_ON","spx_ayer":7483.24,"spx_hoy":7537.43,"retorno_spx":0.724,"vix":15.57,"mercado":"SUBE","acierto":true,"resultado":"✅ CORRECTO"},"accuracy_by_postura":{"RISK_ON":{"sesiones":34,"aciertos":22,"accuracy":64.7},"RISK_OFF":{"sesiones":0,"aciertos":0,"accuracy":null}},"narrativa":{"resumen":"Se registran 22 sesiones correctas de 34 (64.7%), con un historial en construcción que muestra sesiones exclusivamente en postura RISK_ON. La capacidad discriminativa se activará una vez que se disponga de sesiones RISK_OFF evaluables.","analisis_fallos":"Los 12 fallos se producen en sesiones de alta volatilidad, caracterizadas por un retorno medio del SPX de 0.777% y un VIX medio de 17.58, lo que indica dificultades en regímenes de estrés agudo con movimientos bruscos.","valoracion":"NIIN opera con máxima fiabilidad en entornos de baja volatilidad (VIX < 17.58), lo que la convierte en una herramienta institucional adecuada para la gestión de riesgo en mercados estables.","datos_brutos":{"vix_medio_aciertos":16.97,"vix_medio_fallos":17.58,"retorno_medio_aciertos":0.629,"retorno_medio_fallos":0.777,"patron":"estres_agudo"}},"stance_counts":{"RISK_ON":34}},"performance":{"cagr":"12.12%","max_dd":"-43.25%","sharpe":"0.815","total_aum":2885012842.0,"period":"2007-09-25 → 2026-05-15","sessions":4847,"cagr_vs_benchmark":"8.88%","alpha_ann":"5.57%"},"portfolio_breakdown":[{"name":"Equity L/S","value":60.0,"color":"#8b5cf6"},{"name":"Global Macro","value":25.0,"color":"#dc2626"},{"name":"Volatility","value":15.0,"color":"#6366f1"},{"name":"Cash","value":0.0,"color":"#10b981"}],"macro_signal_divergence":{"active":true,"signal_direction":"RISK_ON","macro_pressure_level":"MODERATE","alert_ratio":0.33,"alerts_active":2,"alerts_total":6},"hmm_allocation_breakdown":{"signal_cash":0.0002,"hmm_premium":0.0,"total_cash":0.0002,"knn_weight":0.9724},"z_score_context":{"z_score_ewm":-0.9314,"z_score_raw":-1.0828,"vix_mean_historical":19.7657,"vix_std_historical":8.6839,"z_score_interpretation":"NEUTRAL"},"analog_quality":{"n_analogs":5,"mean_distance":0.2895,"knn_confidence":0.908,"cluster_warning":false,"temporal_diversity":4,"years_represented":["2009","2017","2023","2025"]},"audit_flags":{"O1_no_data_leakage":true,"O2_mahalanobis_distance":true,"O3_hmm_real":true,"O3_hmm_type":"GaussianHMM","O4_knn_weighted_allocation":true,"O5_dynamic_thresholds":true,"O6_dynamic_aum":true,"O7_conservative_fillna":true}};
+const DEFAULT_DATA_EN = {"run_context":{"niin_version":"5.0.0","module":"oracle","config_hash":"sha256:d7d8d942e496cb58563ba39a5cdea0f0289f4c7feb93391c7bc28bc44e305eb0","config_version":"5.0.0","features_active":["rolling_percentiles_5y","pipeline_latency_logging","hmm_gaussian_real_active"],"python_version":"3.11.15","platform":"Linux","run_timestamp_utc":"2026-07-08T01:14:49.571777+00:00","hmm_engine":"GaussianHMM","hmm_is_real":true},"timestamp":"2026-07-08T01:14:49.571733Z","version":"NIIN Analytics","z_score":-0.9314,"z_score_raw":-1.0828,"risk_status":"RISK_ON","confidence":{"level":"LOW","knn_score":0.908,"hmm_state":0,"hmm_label":"LOW_VOLATILITY","hmm_type":"GaussianHMM","hmm_state_probabilities":[1.0,0.0,0.0],"hmm_transition_prob_7d":[0.0044,0.9118,0.0838],"hmm_state_labels":["LOW_VOLATILITY","TRANSITION","SYSTEMIC_STRESS"]},"metrics":{"global_z_score_ewm":-0.9314,"global_z_score_raw":-1.0828,"vix_level":16.13,"spx":7503.85,"vix_mean":19.7657,"vix_std":8.6839,"hmm_state":0,"hmm_is_real":true,"knn_confidence":0.908,"regime":"ALCISTA","sma_200":6968.91},"system_drivers":[{"name":"Volatility","status":"STABLE","intensity":0.4},{"name":"System Stress (EWM)","status":"NOMINAL","intensity":0.0},{"name":"KNN Analog Confidence","status":"HIGH","intensity":0.91}],"action_node":{"type":"SYSTEM_SIGNAL_V5","message":"MAINTAIN EXPOSURE. CONTROLLED RISK.","allocation":{"cash":0.0002,"risk":0.9998,"base_cash":0.0002,"hmm_premium":0.0,"knn_weight":0.9724,"allocation_method":"knn_weighted_sigmoid_v5"},"allocation_method":"knn_weighted_sigmoid_v5"},"analog_intelligence":[{"date":"2025-07-16","distance_mahal":3.2908,"distance_corr":0.2653,"distance_combined":0.244,"reference":"Market Friction Analog","market_behavior":"Statistical Anomaly Detection","analog_returns":{"spx_base":6263.7,"retorno_30d":3.48,"retorno_60d":7.82,"retorno_90d":6.04,"max_drawdown_intermedio":-0.41,"tendencia_post":"ALCISTA","nota":"Retornos calculados sobre dataset certificado SHA-256. Sesiones hábiles."},"narrativa":{"contexto_historico":"In July 2025, the market experienced significant frictions due to economic and geopolitical factors, leading to the detection of statistical anomalies.","evolucion_posterior":"After the analog, the SPX showed an uptrend, with real returns of 3.48% in 30 sessions, 7.82% in 60 sessions, and 6.04% in 90 sessions.","leccion_actual":"The dynamics of this analog suggest that, in an uptrend regime, overcoming friction moments can be followed by a continuation of the uptrend, implying a possible consolidation and subsequent market advance."}},{"date":"2023-12-08","distance_mahal":3.4495,"distance_corr":0.3129,"distance_combined":0.2732,"reference":"Post-Inflation Normalization","market_behavior":"Rate Plateau / Equity Re-rating","analog_returns":{"spx_base":4604.37,"retorno_30d":5.34,"retorno_60d":11.44,"retorno_90d":9.94,"max_drawdown_intermedio":0.39,"tendencia_post":"ALCISTA","nota":"Retornos calculados sobre dataset certificado SHA-256. Sesiones hábiles."},"narrativa":{"contexto_historico":"In December 2023, the market experienced a post-inflationary normalization with a plateau in interest rates and a revaluation of stocks.","evolucion_posterior":"In the following 90 days, the SPX showed an uptrend with real returns of 5.34% in 30 sessions, 11.44% in 60 sessions, and 9.94% in 90 sessions.","leccion_actual":"This historical analog suggests that, in an uptrend regime, the dynamics of rate plateau and stock revaluation can drive a sustained uptrend in the market."}},{"date":"2017-03-10","distance_mahal":3.9664,"distance_corr":0.3327,"distance_combined":0.3006,"reference":"Market Friction Analog","market_behavior":"Statistical Anomaly Detection","analog_returns":{"spx_base":2372.6,"retorno_30d":-1.01,"retorno_60d":2.8,"retorno_90d":3.65,"max_drawdown_intermedio":-1.84,"tendencia_post":"LATERAL","nota":"Retornos calculados sobre dataset certificado SHA-256. Sesiones hábiles."},"narrativa":{"contexto_historico":"In March 2017, the market experienced frictions due to political and economic uncertainty, leading to the detection of statistical anomalies.","evolucion_posterior":"After the analog date, the SPX showed a lateral evolution initially, with a return of -1.01% in 30 sessions, but then recovered with returns of 2.8% and 3.65% in 60 and 90 sessions, respectively.","leccion_actual":"The dynamics of this analog suggest that, even in an uptrend regime, the market can experience periods of lateral consolidation before continuing its upward trend, implying that investors should be cautious and not overreact to short-term fluctuations."}},{"date":"2025-02-03","distance_mahal":4.3902,"distance_corr":0.3283,"distance_combined":0.3127,"reference":"Market Friction Analog","market_behavior":"Statistical Anomaly Detection","analog_returns":{"spx_base":5994.57,"retorno_30d":-5.33,"retorno_60d":-7.77,"retorno_90d":0.19,"max_drawdown_intermedio":-16.88,"tendencia_post":"LATERAL","nota":"Retornos calculados sobre dataset certificado SHA-256. Sesiones hábiles."},"narrativa":{"contexto_historico":"In February 2025, the market experienced significant frictions, leading to the identification of a statistical anomaly.","evolucion_posterior":"After the reference date, the SPX showed a decline of 5.33% in 30 sessions and 7.77% in 60 sessions, before recovering and closing with a return of 0.19% in 90 sessions, characterizing a lateral trend.","leccion_actual":"This historical analog suggests that, even in an uptrend regime, the market can experience periods of correction and lateralization before potentially resuming its upward trend."}},{"date":"2009-12-14","distance_mahal":4.39,"distance_corr":0.3369,"distance_combined":0.317,"reference":"Post-Lehman Recovery","market_behavior":"Risk-On Recovery / Reflation","analog_returns":{"spx_base":1114.11,"retorno_30d":-1.97,"retorno_60d":2.36,"retorno_90d":8.35,"max_drawdown_intermedio":-5.15,"tendencia_post":"ALCISTA","nota":"Retornos calculados sobre dataset certificado SHA-256. Sesiones hábiles."},"narrativa":{"contexto_historico":"The market was in a post-Lehman recovery phase, characterized by an uptrend and economic reactivation.","evolucion_posterior":"The SPX experienced a short-term decline with a return of -1.97% in 30 sessions, but then recovered with returns of 2.36% and 8.35% in 60 and 90 sessions, respectively.","leccion_actual":"The dynamics of this analog suggest that, even in an uptrend regime, short-term corrections can occur, but the overall trend can still be positive, implying that investors should maintain a long-term perspective."}}],"historical_context":{"analog_dates":[{"date":"2025-07-16","distance_mahal":3.2908,"distance_corr":0.2653,"distance_combined":0.244,"reference":"Market Friction Analog","market_behavior":"Statistical Anomaly Detection"},{"date":"2023-12-08","distance_mahal":3.4495,"distance_corr":0.3129,"distance_combined":0.2732,"reference":"Post-Inflation Normalization","market_behavior":"Rate Plateau / Equity Re-rating"},{"date":"2017-03-10","distance_mahal":3.9664,"distance_corr":0.3327,"distance_combined":0.3006,"reference":"Market Friction Analog","market_behavior":"Statistical Anomaly Detection"},{"date":"2025-02-03","distance_mahal":4.3902,"distance_corr":0.3283,"distance_combined":0.3127,"reference":"Market Friction Analog","market_behavior":"Statistical Anomaly Detection"},{"date":"2009-12-14","distance_mahal":4.39,"distance_corr":0.3369,"distance_combined":0.317,"reference":"Post-Lehman Recovery","market_behavior":"Risk-On Recovery / Reflation"}],"knn_confidence":0.908,"distance_metric":"Mahalanobis+Correlation_50/50","pca_components":15,"exclusion_window":180},"dictamen_cuantitativo":{"REGIMEN_ACTUAL":"State HMM: LOW_VOLATILITY. Stable capital flow. Low-risk regime.","ESTRES_SISTEMICO":"VIX: 16.13. Z-Score EWM: -0.931σ. Tail risk under control.","CONTEXTO_HISTORICO":"Mahalanobis analogs: 3 bullish, 2 lateral. Certified real returns. Low volatility periods.","CONFIANZA_KNN":"Confianza KNN: 0.908. Distancia media Mahalanobis: 3.89. Calidad de análogos alta.","DICTAMEN_OPERATIVO":"MAINTAIN EXPOSURE. CONTROLLED RISK.","SINTESIS_ESTRATEGICA":"Maintain exposure in a low-risk environment. The current low volatility regime and controlled tail risk suggest a position maintenance strategy. Confidence in historical analogs and the quality of certified real returns support this decision."},"deep_analysis":"Mantener exposición en un entorno de bajo riesgo. El régimen actual de baja volatilidad y el control del riesgo de cola sugieren una estrategia de mantenimiento de posiciones. La confianza en los análogos históricos y la calidad de los retornos reales certificados respaldan esta decisión.","matriz":[{"id":"ENERGIA","nombre":"Petróleo WTI","ticker":"CL=F","precio":71.83,"limite_dinamico":84.915,"percentil":75,"estado":"🟢 NOMINAL","inverse":false,"threshold_method":"dynamic_percentile"},{"id":"DIVISA","nombre":"Dólar Index","ticker":"DX-Y.NYB","precio":101.13,"limite_dinamico":104.72,"percentil":75,"estado":"🟢 NOMINAL","inverse":false,"threshold_method":"dynamic_percentile"},{"id":"TIPOS","nombre":"Bono USA 10Y","ticker":"^TNX","precio":4.529,"limite_dinamico":4.3742,"percentil":80,"estado":"🔴 CRÍTICO","inverse":false,"threshold_method":"dynamic_percentile"},{"id":"MATERIAS","nombre":"Oro","ticker":"GC=F","precio":4122.2002,"limite_dinamico":3221.075,"percentil":75,"estado":"🔴 CRÍTICO","inverse":false,"threshold_method":"dynamic_percentile"},{"id":"SPREAD","nombre":"HY Credit","ticker":"HYG","precio":null,"limite_dinamico":75.0,"percentil":25,"estado":"⚪ SIN DATOS","inverse":true,"threshold_method":"dynamic_percentile"},{"id":"DURATION","nombre":"Long Duration","ticker":"TLT","precio":null,"limite_dinamico":90.0,"percentil":25,"estado":"⚪ SIN DATOS","inverse":true,"threshold_method":"dynamic_percentile"}],"alertas_activas":["Bono USA 10Y","Oro"],"exposure_ranking":[{"sector":"Mining / Commodities","score":100.0,"nivel":"🟡 MEDIO","impacto":"Commodity cycle.","accion":"Production adjustment."},{"sector":"Utilities","score":58.8,"nivel":"🟡 MEDIO","impacto":"High financial debt burden.","accion":"Debt restructuring."},{"sector":"Construction / R.E.","score":58.8,"nivel":"🟡 MEDIO","impacto":"Total dependence on financing.","accion":"Pipeline review."},{"sector":"Technology","score":51.2,"nivel":"🟡 MEDIO","impacto":"Sensitivity to rates and capital.","accion":"Optimization of structure."},{"sector":"Discretionary Consumption","score":39.9,"nivel":"🟡 MEDIO","impacto":"Sensitivity to credit and prices.","accion":"Margin adjustment."},{"sector":"Heavy Industry","score":25.9,"nivel":"🟡 MEDIO","impacto":"Energy-intensive + financing.","accion":"CAPEX review."},{"sector":"Banking / Financial","score":25.0,"nivel":"🟡 MEDIO","impacto":"Interest margin + credit.","accion":"Monitoring of delinquency."},{"sector":"Import Retail","score":21.1,"nivel":"🟢 BAJO","impacto":"Dependence on the dollar.","accion":"Currency hedging."},{"sector":"Airlines","score":11.8,"nivel":"🟢 BAJO","impacto":"Critical fuel cost.","accion":"Fuel hedge evaluation."},{"sector":"Transportation / Logistics","score":0.0,"nivel":"🟢 BAJO","impacto":"Pressure on logistics margins.","accion":"Route optimization."}],"orden_corporativa":"RÉGIMEN NOMINAL. RIESGO SISTÉMICO CONTROLADO.","informe":{"PULSO_SISTEMICO":"Financial markets in a nominal regime with controlled systemic risk.","SENAL_NIIN":"NOMINAL STABILITY","ANALISIS_IA":{"dinamica_z_score":"The Z-Score EWM is at -0.931σ, indicating a slight contraction in systemic risk.","umbrales_dinamicos":"Active dynamic thresholds show that the 10Y US Bond and Gold are at critical levels, while WTI Oil and the Dollar Index are within nominal thresholds.","conclusion_fortaleza":"The NIIN Analytics system shows consistency in risk assessment, with a focus on nominal stability.","evolucion_cfo_fase_1":"In T-1, systemic risk was at -0.898σ, indicating a slight decrease in risk in T.","evolucion_cfo_fase_2":"The real impact on Treasury and Cash Flow is minimized thanks to the nominal stability of the markets.","resumen_ejecutivo":"The NIIN Analytics system demonstrates robustness in asset management, with a focus on nominal stability and systemic risk control.","racional_completo":"The strategy in T vs T-1 focuses on maintaining nominal stability, with an emphasis on asset management and minimizing systemic risk."}},"auditoria_mercado":{"fecha_t_minus_1":"2026-07-07","z_score_prev":-0.8978,"delta_z":-0.0336,"cambios_exposicion":[{"s":"Utilities","d":2.4},{"s":"Construcción / R.E.","d":2.4},{"s":"Retail Importador","d":-1.6}],"momentum":"risk contraction"},"niin_accuracy":{"status":"active","days_tracked":34,"accuracy_score":64.7,"aciertos":22,"fallos":12,"current_streak":2,"max_streak":8,"confidence_level":"🟡 FIABILIDAD MEDIA","metrica":"postura_vs_retorno_spx","last_session":{"date":"2026-07-07","postura_ayer":"RISK_ON","spx_ayer":7483.24,"spx_hoy":7537.43,"retorno_spx":0.724,"vix":15.57,"mercado":"SUBE","acierto":true,"resultado":"✅ CORRECTO"},"accuracy_by_postura":{"RISK_ON":{"sesiones":34,"aciertos":22,"accuracy":64.7},"RISK_OFF":{"sesiones":0,"aciertos":0,"accuracy":null}},"narrativa":{"resumen":"There are 22 correct sessions out of 34 (64.7%), with a history under construction that shows sessions exclusively in a RISK_ON posture. The discriminative capacity will be activated once evaluable RISK_OFF sessions are available.","analisis_fallos":"The 12 failures occur in high volatility sessions, characterized by an average SPX return of 0.777% and an average VIX of 17.58, indicating difficulties in acute stress regimes with abrupt movements.","valoracion":"NIIN operates with maximum reliability in low volatility environments (VIX < 17.58), making it an adequate institutional tool for risk management in stable markets.","datos_brutos":{"vix_medio_aciertos":16.97,"vix_medio_fallos":17.58,"retorno_medio_aciertos":0.629,"retorno_medio_fallos":0.777,"patron":"estres_agudo"}},"stance_counts":{"RISK_ON":34}},"performance":{"cagr":"12.12%","max_dd":"-43.25%","sharpe":"0.815","total_aum":2885012842.0,"period":"2007-09-25 → 2026-05-15","sessions":4847,"cagr_vs_benchmark":"8.88%","alpha_ann":"5.57%"},"portfolio_breakdown":[{"name":"Equity L/S","value":60.0,"color":"#8b5cf6"},{"name":"Global Macro","value":25.0,"color":"#dc2626"},{"name":"Volatility","value":15.0,"color":"#6366f1"},{"name":"Cash","value":0.0,"color":"#10b981"}],"macro_signal_divergence":{"active":true,"signal_direction":"RISK_ON","macro_pressure_level":"MODERATE","alert_ratio":0.33,"alerts_active":2,"alerts_total":6},"hmm_allocation_breakdown":{"signal_cash":0.0002,"hmm_premium":0.0,"total_cash":0.0002,"knn_weight":0.9724},"z_score_context":{"z_score_ewm":-0.9314,"z_score_raw":-1.0828,"vix_mean_historical":19.7657,"vix_std_historical":8.6839,"z_score_interpretation":"NEUTRAL"},"analog_quality":{"n_analogs":5,"mean_distance":0.2895,"knn_confidence":0.908,"cluster_warning":false,"temporal_diversity":4,"years_represented":["2009","2017","2023","2025"]},"audit_flags":{"O1_no_data_leakage":true,"O2_mahalanobis_distance":true,"O3_hmm_real":true,"O3_hmm_type":"GaussianHMM","O4_knn_weighted_allocation":true,"O5_dynamic_thresholds":true,"O6_dynamic_aum":true,"O7_conservative_fillna":true},"language":"en"};
+</script>
+<script>
+/* NIIN POST STUDIO · logic ------------------------------------------------ */
+'use strict';
+
+/* ---------- helpers ---------- */
+const HMM_ES = { LOW_VOLATILITY: 'Baja volatilidad', TRANSITION: 'Transición', SYSTEMIC_STRESS: 'Estrés sistémico' };
+const HMM_EN = { LOW_VOLATILITY: 'Low volatility', TRANSITION: 'Transition', SYSTEMIC_STRESS: 'Systemic stress' };
+const TREND = {
+  es: { ALCISTA: ['alcista', 'alcistas'], BAJISTA: ['bajista', 'bajistas'], LATERAL: ['lateral', 'laterales'] },
+  en: { ALCISTA: ['bullish', 'bullish'], BAJISTA: ['bearish', 'bearish'], LATERAL: ['sideways', 'sideways'] },
+};
+const SIG_EMO = { RISK_ON: '🟢', RISK_OFF: '🔴', NEUTRAL: '🟡' };
+
+function fnum(x, dec = 2, def = '—') {
+  if (x === null || x === undefined || (typeof x === 'number' && isNaN(x))) return def;
+  return Number(x).toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+}
+function pct(x, dec = 2) {
+  if (x === null || x === undefined || isNaN(x)) return '—';
+  return (x * 100).toFixed(dec) + '%';
+}
+function signPct(x, dec = 2) {
+  if (x === null || x === undefined || isNaN(x)) return '—';
+  return (x >= 0 ? '+' : '') + Number(x).toFixed(dec) + '%';
+}
+/* X/Twitter length: every URL counts as 23 (t.co) */
+function xLen(t) { return t.replace(/https?:\/\/\S+/g, 'x'.repeat(23)).length; }
+
+function estadoTxt(e, lang) {
+  const clean = String(e || '').replace(/[^\wÁÉÍÓÚÑ ]/g, '').trim();
+  if (lang === 'en') return { NOMINAL: 'NOMINAL', 'CRÍTICO': 'CRITICAL', 'SIN DATOS': 'NO DATA' }[clean] || clean;
+  return clean;
+}
+function estadoIcon(e) {
+  const s = String(e || '');
+  if (s.includes('🔴')) return '🔴';
+  if (s.includes('🟢')) return '🟢';
+  if (s.includes('🟡')) return '🟡';
+  return '⚪';
+}
+
+
+/* ---------- icon modes: full | min | none (tipográfico) ---------- */
+const SIG_CHAR = { RISK_ON: '▲', RISK_OFF: '▼', NEUTRAL: '◆' };
+function applyIconMode(text, mode, c, lang) {
+  if (mode === 'full') return text;
+  let t = text;
+  if (mode === 'min') {
+    // conserva puntos de estado y avisos; elimina decorativos de sección
+    return t.replace(/[📊🧭🧠📊🔍📐⚙🛠🏭🔁️]\ufe0f?\s?/gu, '');
+  }
+  // none → tipográfico puro
+  const sig = SIG_CHAR[c.signal] || '◆';
+  t = t.split(c.emo + ' ').join(sig + ' ');                     // señal: 🟢 → ▲
+  t = t.replace(/🟢\s?/gu, '[OK] ').replace(/🔴\s?/gu, '[CRIT] ')
+       .replace(/🟡\s?/gu, '[MED] ').replace(/⚪\s?/gu, '[N\/D] ');
+  t = t.replace(/[📊🧭🧠📊🔍📐⚙🛠🏭🔁]\ufe0f?\s?/gu, '\/\/ ');   // cabeceras → //
+  t = t.replace(/🔗\s?/gu, '→ ');
+  t = t.replace(/⚠️\s?/gu, lang === 'es' ? 'AVISO — ' : 'NOTE — ');
+  t = t.replace(/🧵👇/gu, lang === 'es' ? '— HILO —' : '— THREAD —');
+  t = t.replace(/👇/gu, '');
+  return t;
+}
+
+/* ---------- context extraction ---------- */
+function extract(d) {
+  const conf = d.confidence || {}, m = d.metrics || {}, act = d.action_node || {}, al = act.allocation || {};
+  const acc = d.niin_accuracy || {}, accN = acc.narrativa || {}, raw = accN.datos_brutos || {};
+  const dict = d.dictamen_cuantitativo || {}, perf = d.performance || {}, aud = d.auditoria_mercado || {};
+  const div = d.macro_signal_divergence || {}, aq = d.analog_quality || {};
+  const analogs = d.analog_intelligence || [];
+  const matriz = (d.matriz || []).filter(r => r);
+  const sectors = d.exposure_ranking || [];
+  const flags = d.audit_flags || {};
+
+  let fecha = '', fechaEn = '';
+  try {
+    const dt = new Date(d.timestamp);
+    fecha = dt.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' });
+    fechaEn = dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' });
+  } catch (e) { fecha = fechaEn = '—'; }
+
+  const trends = {};
+  analogs.forEach(a => {
+    const t = a?.analog_returns?.tendencia_post;
+    if (t) trends[t] = (trends[t] || 0) + 1;
+  });
+  const trendTxt = lang => Object.entries(trends).sort((a, b) => b[1] - a[1])
+    .map(([t, n]) => `${n} ${(TREND[lang][t] || [t.toLowerCase(), t.toLowerCase()])[n > 1 ? 1 : 0]}`).join(', ');
+
+  const top = analogs[0] || {}, topR = top.analog_returns || {};
+  const criticos = matriz.filter(r => String(r.estado).includes('🔴'));
+  const flagsPass = Object.entries(flags).filter(([k, v]) => v === true).length;
+  const flagsTotal = Object.entries(flags).filter(([k, v]) => typeof v === 'boolean').length;
+
+  return {
+    fecha, fechaEn,
+    signal: d.risk_status || 'NEUTRAL',
+    emo: SIG_EMO[d.risk_status] || '🟡',
+    sigTxt: (d.risk_status || 'NEUTRAL').replace('_', '-'),
+    msg: act.message || '',
+    z: m.global_z_score_ewm, zRaw: m.global_z_score_raw, vix: m.vix_level, spx: m.spx, sma: m.sma_200,
+    hmm: conf.hmm_label || '', knn: conf.knn_score,
+    trans7d: conf.hmm_transition_prob_7d || [],
+    risk: al.risk, cash: al.cash,
+    alertas: d.alertas_activas || [],
+    matriz, criticos, sectors, analogs, top, topR,
+    trendTxt,
+    nAn: aq.n_analogs ?? analogs.length, years: aq.years_represented || [],
+    accScore: acc.accuracy_score, accDays: acc.days_tracked, hits: acc.aciertos, miss: acc.fallos,
+    streak: acc.current_streak, maxStreak: acc.max_streak,
+    accResumen: accN.resumen || '', accFallos: accN.analisis_fallos || '', accVal: accN.valoracion || '',
+    stanceCounts: (() => {
+      if (acc.stance_counts) return acc.stance_counts;
+      const sh = acc.session_history || [];
+      if (!sh.length) return null;
+      const sc = {}; sh.forEach(s => { if (s.postura_ayer) sc[s.postura_ayer] = (sc[s.postura_ayer] || 0) + 1; });
+      return sc;
+    })(),
+    avg90: (() => {
+      const rs = analogs.map(a => a?.analog_returns?.retorno_90d).filter(v => typeof v === 'number');
+      return rs.length ? rs.reduce((a, b) => a + b, 0) / rs.length : null;
+    })(),
+    vixHit: raw.vix_medio_aciertos, vixMiss: raw.vix_medio_fallos,
+    deltaZ: aud.delta_z, zPrev: aud.z_score_prev, momentum: aud.momentum || '',
+    divActive: div.active, divPressure: div.macro_pressure_level, divRatio: div.alert_ratio,
+    cagr: perf.cagr, sharpe: perf.sharpe, maxDD: perf.max_dd, alpha: perf.alpha_ann,
+    bench: perf.cagr_vs_benchmark, period: perf.period, sessions: perf.sessions,
+    sintesis: dict.SINTESIS_ESTRATEGICA || '', orden: d.orden_corporativa || '',
+    flagsPass, flagsTotal,
+    version: d.run_context?.niin_version || '5.0.0',
+    hash: (d.run_context?.config_hash || '').replace('sha256:', '').slice(0, 12),
+  };
+}
+
+/* ---------- shared strings ---------- */
+const DISC = {
+  es: '⚠️ Output de sistema cuantitativo. No es asesoramiento financiero.',
+  en: '⚠️ Quantitative system output. Not financial advice.',
+};
+function hmmName(c, lang) { return (lang === 'en' ? HMM_EN : HMM_ES)[c.hmm] || c.hmm; }
+function dateOf(c, lang) { return lang === 'en' ? c.fechaEn : c.fecha; }
+function matrizLines(c, lang) {
+  return c.matriz.map(r => `${estadoIcon(r.estado)} ${r.nombre} (${r.ticker}) · ${fnum(r.precio)} vs límite P${r.percentil}: ${fnum(r.limite_dinamico)} → ${estadoTxt(r.estado, lang)}`);
+}
+
+
+function trCaveat(c, lang) {
+  const sc = c.stanceCounts || {};
+  const keys = Object.keys(sc);
+  if (keys.length !== 1 || !c.accDays) return '';
+  const st = keys[0].replace('_', '-');
+  return lang === 'es'
+    ? ` Matiz de honestidad: las ${c.accDays} sesiones evaluadas corresponden íntegramente a postura ${st} — el sistema aún no ha emitido una señal defensiva que poner a prueba.`
+    : ` Honesty nuance: all ${c.accDays} scored sessions correspond to a ${st} stance — the system has yet to issue a defensive signal to be tested.`;
+}
+
+/* ---------- gancho automático desde los datos ---------- */
+
+function hookFor(c, lang) {
+  const es = lang === 'es';
+  // 1 · divergencia macro con exposición plena (la tensión es el gancho)
+  if (c.divActive && (c.risk ?? 0) > 0.9 && c.alertas.length && c.avg90 !== null)
+    return es
+      ? `${c.alertas.join(' y ')} en zona crítica — y el sistema mantiene el ${pct(c.risk, 2)} en riesgo. ¿Contradicción? Los ${c.nAn} análogos históricos más cercanos promediaron ${signPct(c.avg90)} a 90 sesiones.`
+      : `${c.alertas.join(' and ')} in critical territory — yet the system holds ${pct(c.risk, 2)} at risk. Contradiction? The ${c.nAn} nearest historical analogs averaged ${signPct(c.avg90)} over 90 sessions.`;
+  // 2 · análogo de crisis en el ranking — con su retorno real del JSON
+  const cAn = (c.analogs || []).find(a => { const y = parseInt((a.date || '').slice(0, 4), 10); return y && y <= 2010; });
+  if (cAn) {
+    const r90 = cAn.analog_returns?.retorno_90d;
+    return es
+      ? `Entre los vecinos estadísticos del mercado de hoy hay un día de ${cAn.date.slice(0, 4)}. Su retorno real posterior, certificado: ${signPct(r90)} en 90 sesiones.`
+      : `Among today's statistical nearest neighbours sits a trading day from ${cAn.date.slice(0, 4)}. Its certified realised return: ${signPct(r90)} over 90 sessions.`;
+  }
+  // 3 · salto de estrés sistémico contra T-1
+  if (Math.abs(c.deltaZ ?? 0) >= 0.15)
+    return es
+      ? `El estrés sistémico se movió ${fnum(Math.abs(c.deltaZ), 2)}σ en una sola sesión: Z-Score en ${fnum(c.z, 2)}σ, régimen ${hmmName(c, 'es')}, señal ${c.sigTxt}.`
+      : `Systemic stress moved ${fnum(Math.abs(c.deltaZ), 2)}σ in a single session: Z-Score at ${fnum(c.z, 2)}σ, ${hmmName(c, 'en')} regime, ${c.sigTxt} signal.`;
+  // 4 · alertas activas como tensión de fondo
+  if (c.alertas.length)
+    return es
+      ? `${c.alertas.length} de ${c.matriz.length} semáforos macro en rojo y la señal sigue en ${c.sigTxt}. Esta es la lectura completa, sin editar.`
+      : `${c.alertas.length} of ${c.matriz.length} macro lights are red and the signal is still ${c.sigTxt}. Here is the full read, unedited.`;
+  return '';
+}
+function withHook(body, c, lang, S) {
+  if (!S.gancho) return body;
+  const h = hookFor(c, lang);
+  return (h && h.length + 2 + body.length <= 2980) ? h + '\n\n' + body : body;
+}
+
+/* ---------- LinkedIn templates ---------- */
+function liDaily(c, lang, S, url, tags) {
+  const es = lang === 'es', L = [];
+  L.push(`${c.emo} NIIN Analytics · ${es ? 'Señal diaria' : 'Daily signal'} · ${dateOf(c, lang)}`);
+  L.push('');
+  L.push(es ? `Dictamen del sistema: ${c.msg}` : `System verdict: ${c.msg}`);
+  if (S.regimen) {
+    L.push('');
+    L.push(es ? '📊 LECTURA DEL RÉGIMEN' : '📊 REGIME READ');
+    L.push(`▸ ${es ? 'Señal' : 'Signal'}: ${c.sigTxt} · ${es ? 'Exposición' : 'Exposure'}: ${pct(c.risk)} ${es ? 'riesgo' : 'risk'} / ${pct(c.cash)} cash`);
+    L.push(`▸ ${es ? 'Régimen HMM' : 'HMM regime'}: ${hmmName(c, lang)} · P(${es ? 'estrés a 7d' : 'stress in 7d'}): ${pct(c.trans7d[2], 1)}`);
+    L.push(`▸ Z-Score EWM: ${fnum(c.z, 3)}σ (${signPct(c.deltaZ * 100 / 100, 3).replace('%', 'σ')} vs T-1) · VIX: ${fnum(c.vix)}`);
+    L.push(`▸ ${es ? 'Confianza KNN' : 'KNN confidence'}: ${fnum(c.knn, 3)} · ${c.nAn} ${es ? 'análogos' : 'analogs'} (${c.years.join(', ')})`);
+  }
+  if (S.matriz) {
+    L.push('');
+    const n = c.alertas.length;
+    L.push(es
+      ? `🧭 MATRIZ MACRO · ${n}/${c.matriz.length} ${n === 1 ? 'alerta activa' : 'alertas activas'}${n ? ': ' + c.alertas.join(', ') : ''}`
+      : `🧭 MACRO MATRIX · ${n}/${c.matriz.length} active alert${n === 1 ? '' : 's'}${n ? ': ' + c.alertas.join(', ') : ''}`);
+    if (c.divActive) L.push(es
+      ? `Divergencia macro-señal detectada: presión ${c.divPressure} con señal ${c.sigTxt}. El sistema la reconcilia vía ponderación KNN.`
+      : `Macro-signal divergence detected: ${c.divPressure} pressure vs ${c.sigTxt} stance. Reconciled through KNN weighting.`);
+  }
+  if (S.analogos && c.top.date) {
+    L.push('');
+    L.push(es ? '🧠 INTELIGENCIA DE ANÁLOGOS' : '🧠 ANALOG INTELLIGENCE');
+    L.push(es
+      ? `Vecino más cercano (Mahalanobis + correlación): ${c.top.date} — "${c.top.reference}". Retorno real posterior: ${signPct(c.topR.retorno_30d)} a 30 sesiones, ${signPct(c.topR.retorno_90d)} a 90. Distribución post-análogo: ${c.trendTxt('es')}.`
+      : `Nearest neighbour (Mahalanobis + correlation): ${c.top.date} — "${c.top.reference}". Realised forward return: ${signPct(c.topR.retorno_30d)} at 30 sessions, ${signPct(c.topR.retorno_90d)} at 90. Post-analog distribution: ${c.trendTxt('en')}.`);
+  }
+  if (S.accuracy) {
+    L.push('');
+    L.push(es
+      ? `📊 TRACK RECORD EN VIVO: ${c.hits}/${c.accDays} sesiones correctas (${fnum(c.accScore, 1)}%) · racha ${c.streak} · máx ${c.maxStreak}. Publicado a diario, sin cherry-picking.${trCaveat(c, 'es')}`
+      : `📊 LIVE TRACK RECORD: ${c.hits}/${c.accDays} correct sessions (${fnum(c.accScore, 1)}%) · streak ${c.streak} · max ${c.maxStreak}. Published daily, no cherry-picking.${trCaveat(c, 'en')}`);
+  }
+  L.push('');
+  L.push(es ? `Síntesis: ${c.sintesis}` : `Synthesis: ${c.sintesis}`);
+  L.push('');
+  L.push(es
+    ? `Pipeline autónomo (KNN + HMM gaussiano + umbrales dinámicos por percentil) · ${c.flagsPass}/${c.flagsTotal} flags de auditoría PASS · v${c.version} · cfg ${c.hash}`
+    : `Autonomous pipeline (KNN + Gaussian HMM + dynamic percentile thresholds) · ${c.flagsPass}/${c.flagsTotal} audit flags PASS · v${c.version} · cfg ${c.hash}`);
+  L.push('');
+  L.push(`🔗 ${es ? 'Dashboard en vivo' : 'Live dashboard'}: ${url}`);
+  if (S.disclaimer) { L.push(''); L.push(DISC[lang]); }
+  if (tags) { L.push(''); L.push(tags); }
+  return withHook(L.join('\n'), c, lang, S);
+}
+
+function liDeep(c, lang, S, url, tags) {
+  const es = lang === 'es', L = [];
+  L.push(`${c.emo} NIIN Analytics · ${es ? 'Análisis extendido de régimen' : 'Extended regime analysis'} · ${dateOf(c, lang)}`);
+  L.push('');
+  L.push(es
+    ? `Radiografía completa de la sesión. Todo lo que sigue es output directo del sistema — sin edición humana del dictamen.`
+    : `Full session X-ray. Everything below is direct system output — no human edit of the verdict.`);
+  if (S.regimen) {
+    L.push('');
+    L.push(es ? '① RÉGIMEN Y ESTRÉS SISTÉMICO' : '① REGIME & SYSTEMIC STRESS');
+    L.push(es
+      ? `SPX ${fnum(c.spx)} sobre SMA200 (${fnum(c.sma)}). HMM gaussiano de 3 estados en ${hmmName(c, lang)} con probabilidad de transición a estrés sistémico en 7 días del ${pct(c.trans7d[2], 1)}. Z-Score EWM ${fnum(c.z, 3)}σ (raw ${fnum(c.zRaw, 3)}σ) — momentum: ${c.momentum.replace(/_/g, ' ')}.`
+      : `SPX ${fnum(c.spx)} above SMA200 (${fnum(c.sma)}). 3-state Gaussian HMM in ${hmmName(c, lang)}, 7-day transition probability into systemic stress at ${pct(c.trans7d[2], 1)}. EWM Z-Score ${fnum(c.z, 3)}σ (raw ${fnum(c.zRaw, 3)}σ) — momentum: ${c.momentum.replace(/_/g, ' ')}.`);
+  }
+  if (S.matriz) {
+    L.push('');
+    L.push(es ? '② MATRIZ MACRO · UMBRALES DINÁMICOS POR PERCENTIL' : '② MACRO MATRIX · DYNAMIC PERCENTILE THRESHOLDS');
+    matrizLines(c, lang).forEach(l => L.push(l));
+    if (c.criticos.length) L.push(es
+      ? `Lectura: ${c.criticos.map(r => r.nombre).join(' y ')} presionan por encima de su percentil histórico; el resto del tablero permanece nominal. Ratio de alerta: ${pct(c.divRatio, 0)}.`
+      : `Read: ${c.criticos.map(r => r.nombre).join(' and ')} pressing above their historical percentile; rest of the board nominal. Alert ratio: ${pct(c.divRatio, 0)}.`);
+  }
+  if (S.analogos && c.analogs.length) {
+    L.push('');
+    L.push(es ? '③ ANÁLOGOS HISTÓRICOS (KNN · MAHALANOBIS+CORRELACIÓN 50/50)' : '③ HISTORICAL ANALOGS (KNN · MAHALANOBIS+CORRELATION 50/50)');
+    c.analogs.slice(0, 3).forEach((a, i) => {
+      const r = a.analog_returns || {};
+      L.push(`${i + 1}. ${a.date} · ${a.reference} → 30d ${signPct(r.retorno_30d)} · 60d ${signPct(r.retorno_60d)} · 90d ${signPct(r.retorno_90d)} · maxDD ${signPct(r.max_drawdown_intermedio)}`);
+    });
+    const lec = c.top?.narrativa?.leccion_actual;
+    if (lec && es) L.push(`Lección del análogo dominante: ${lec}`);
+    if (!es) L.push(`Post-analog trend distribution: ${c.trendTxt('en')} · temporal diversity across ${c.years.join('/')}.`);
+  }
+  if (S.sectores && c.sectors.length) {
+    L.push('');
+    L.push(es ? '④ EXPOSICIÓN SECTORIAL (TOP 5 POR SCORE DE PRESIÓN)' : '④ SECTOR EXPOSURE (TOP 5 BY PRESSURE SCORE)');
+    c.sectors.slice(0, 5).forEach(s => L.push(`${estadoIcon(s.nivel)} ${s.sector} · ${fnum(s.score, 1)} — ${s.impacto} ${es ? 'Acción' : 'Action'}: ${s.accion}`));
+  }
+  if (S.performance) {
+    L.push('');
+    L.push(es
+      ? `⑤ BACKTEST 19 AÑOS (${c.period} · ${fnum(c.sessions, 0)} sesiones): CAGR ${c.cagr} vs benchmark ${c.bench} · alpha anualizado ${c.alpha} · Sharpe ${c.sharpe} · max drawdown ${c.maxDD}. El drawdown se publica junto al alpha: un sistema que solo enseña lo bueno no es auditable.`
+      : `⑤ 19-YEAR BACKTEST (${c.period} · ${fnum(c.sessions, 0)} sessions): CAGR ${c.cagr} vs benchmark ${c.bench} · annualised alpha ${c.alpha} · Sharpe ${c.sharpe} · max drawdown ${c.maxDD}. Drawdown is published next to alpha: a system that only shows the good part is not auditable.`);
+  }
+  if (S.accuracy) {
+    L.push('');
+    L.push(es
+      ? `⑥ TRACK RECORD EN VIVO: ${c.hits}/${c.accDays} (${fnum(c.accScore, 1)}%). ${c.accVal}`
+      : `⑥ LIVE TRACK RECORD: ${c.hits}/${c.accDays} (${fnum(c.accScore, 1)}%). Highest reliability in low-volatility regimes (avg VIX on hits ${fnum(c.vixHit)} vs ${fnum(c.vixMiss)} on misses).`);
+  }
+  L.push('');
+  L.push(es ? `DICTAMEN OPERATIVO: ${c.msg} — ${c.orden}` : `OPERATING VERDICT: ${c.msg} — ${c.orden}`);
+  L.push('');
+  L.push(`🔗 ${url}`);
+  if (S.disclaimer) { L.push(''); L.push(DISC[lang]); }
+  if (tags) { L.push(''); L.push(tags); }
+  return withHook(L.join('\n'), c, lang, S);
+}
+
+function liTrack(c, lang, S, url, tags) {
+  const es = lang === 'es', L = [];
+  L.push(`📊 NIIN Analytics · ${es ? 'Track record en vivo' : 'Live track record'} · ${dateOf(c, lang)}`);
+  L.push('');
+  L.push(es
+    ? `La mayoría de cuentas de "señales" solo publican aciertos. NIIN publica la métrica completa cada día, se calcule lo que se calcule. Hoy toca auditoría.`
+    : `Most "signal" accounts only publish wins. NIIN publishes the full metric every single day, whatever it computes. Audit time.`);
+  L.push('');
+  L.push(es ? '📊 LOS NÚMEROS, SIN MAQUILLAJE' : '📊 THE NUMBERS, UNVARNISHED');
+  L.push(`▸ ${es ? 'Sesiones evaluadas' : 'Sessions scored'}: ${c.accDays}`);
+  L.push(`▸ ${es ? 'Aciertos' : 'Hits'}: ${c.hits} · ${es ? 'Fallos' : 'Misses'}: ${c.miss} → ${fnum(c.accScore, 1)}%`);
+  L.push(`▸ ${es ? 'Racha actual' : 'Current streak'}: ${c.streak} · ${es ? 'racha máxima' : 'max streak'}: ${c.maxStreak}`);
+  L.push(`▸ ${es ? 'Métrica' : 'Metric'}: ${es ? 'postura del día anterior vs retorno real del SPX' : "previous day's stance vs realised SPX return"}`)
+  const cv = trCaveat(c, lang); if (cv) L.push(cv.trim());
+  L.push('');
+  L.push(es ? '🔍 DÓNDE FALLA EL SISTEMA (SÍ, TAMBIÉN SE PUBLICA)' : '🔍 WHERE THE SYSTEM FAILS (YES, THAT GETS PUBLISHED TOO)');
+  L.push(es
+    ? c.accFallos
+    : `The ${c.miss} misses cluster in acute-stress sessions: average VIX on misses ${fnum(c.vixMiss)} vs ${fnum(c.vixHit)} on hits. Sharp intraday reversals remain the hardest regime.`);
+  L.push('');
+  L.push(es ? `Valoración del propio sistema: ${c.accVal}` : `System's own assessment: highest reliability below VIX ${fnum(c.vixMiss)} — an instrument for stable-regime risk management, not a crystal ball.`);
+  if (S.performance) {
+    L.push('');
+    L.push(es
+      ? `Contexto de largo plazo: backtest ${c.period}, CAGR ${c.cagr} (benchmark ${c.bench}), Sharpe ${c.sharpe}, max drawdown ${c.maxDD}.`
+      : `Long-run context: backtest ${c.period}, CAGR ${c.cagr} (benchmark ${c.bench}), Sharpe ${c.sharpe}, max drawdown ${c.maxDD}.`);
+  }
+  L.push('');
+  L.push(es
+    ? `Por qué esta transparencia: si el track record se publica a diario y de forma automática, no hay hueco para el sesgo de supervivencia. La credibilidad se construye enseñando los fallos.`
+    : `Why this transparency: when the track record is published daily and automatically, there is no room for survivorship bias. Credibility is built by showing the misses.`);
+  L.push('');
+  L.push(`🔗 ${es ? 'Métrica en vivo' : 'Live metric'}: ${url}`);
+  if (S.disclaimer) { L.push(''); L.push(DISC[lang]); }
+  if (tags) { L.push(''); L.push(tags); }
+  return withHook(L.join('\n'), c, lang, S);
+}
+
+function liBuild(c, lang, S, url, tags) {
+  const es = lang === 'es', L = [];
+  L.push(`🛠️ NIIN Analytics v${c.version} · Build in public`);
+  L.push('');
+  L.push(es
+    ? `Hace unos meses decidí construir, de forma completamente independiente, un sistema propietario de gestión cuantitativa de riesgo. Hoy corre solo, cada día, y publica sus resultados en abierto. Así funciona por dentro (sin exponer el algoritmo):`
+    : `A few months ago I set out to build, fully independently, a proprietary quantitative risk-management system. Today it runs on its own, every day, and publishes its results in the open. Here is how it works (without exposing the algorithm):`);
+  L.push('');
+  L.push(es ? '⚙️ ARQUITECTURA' : '⚙️ ARCHITECTURE');
+  L.push(es
+    ? `▸ Motor oráculo en Python: KNN sobre ${c.nAn} análogos históricos (distancia Mahalanobis + correlación 50/50), HMM gaussiano real de 3 estados, Z-Score EWM sobre VIX y matriz macro de ${c.matriz.length} activos con umbrales dinámicos por percentil.`
+    : `▸ Python oracle engine: KNN over ${c.nAn} historical analogs (Mahalanobis + correlation 50/50), real 3-state Gaussian HMM, EWM Z-Score on VIX, and a ${c.matriz.length}-asset macro matrix with dynamic percentile thresholds.`);
+  L.push(es
+    ? `▸ Pipeline DevOps: GitHub Actions con cron diario a las 21:30 UTC → genera el JSON auditado (hash SHA-256 de configuración: ${c.hash}…) → repo público de datos → dashboard React/TypeScript en Vercel.`
+    : `▸ DevOps pipeline: GitHub Actions on a daily 21:30 UTC cron → produces the audited JSON (SHA-256 config hash: ${c.hash}…) → public data repo → React/TypeScript dashboard on Vercel.`);
+  L.push(es
+    ? `▸ ${c.flagsPass}/${c.flagsTotal} flags de auditoría en PASS: sin data leakage, HMM real (no simulado), asignación ponderada por KNN, umbrales dinámicos, AUM dinámico y fillna conservador.`
+    : `▸ ${c.flagsPass}/${c.flagsTotal} audit flags PASS: no data leakage, real (non-simulated) HMM, KNN-weighted allocation, dynamic thresholds, dynamic AUM, conservative fillna.`);
+  L.push('');
+  L.push(es ? '📐 PRINCIPIOS DE DISEÑO' : '📐 DESIGN PRINCIPLES');
+  L.push(es
+    ? `1. Solo se publica el output, nunca el código. La propiedad intelectual está registrada; la autoría, demostrada con anexo técnico.\n2. Transparencia radical: el track record (hoy ${fnum(c.accScore, 1)}% en ${c.accDays} sesiones) se publica a diario, con fallos incluidos.\n3. Cero intervención manual: si el sistema se equivoca, se ve. Si acierta, también.`
+    : `1. Only the output is published, never the code. The IP is registered; authorship proven via technical annex.\n2. Radical transparency: the track record (${fnum(c.accScore, 1)}% over ${c.accDays} sessions today) is published daily, misses included.\n3. Zero manual intervention: when the system is wrong, you see it. When it's right, too.`);
+  if (S.performance) {
+    L.push('');
+    L.push(es
+      ? `Sobre datos ${c.period} (${fnum(c.sessions, 0)} sesiones): CAGR ${c.cagr} vs ${c.bench} de benchmark · Sharpe ${c.sharpe} · max DD ${c.maxDD}.`
+      : `Over ${c.period} (${fnum(c.sessions, 0)} sessions): CAGR ${c.cagr} vs ${c.bench} benchmark · Sharpe ${c.sharpe} · max DD ${c.maxDD}.`);
+  }
+  L.push('');
+  L.push(es
+    ? `Señal de hoy: ${c.emo} ${c.sigTxt} — ${c.msg}`
+    : `Today's signal: ${c.emo} ${c.sigTxt} — ${c.msg}`);
+  L.push('');
+  L.push(`🔗 ${url}`);
+  if (S.disclaimer) { L.push(''); L.push(DISC[lang]); }
+  if (tags) { L.push(''); L.push(tags); }
+  return L.join('\n');
+}
+
+/* ---------- X templates (arrays of tweets) ---------- */
+function xDaily(c, lang, S, url, tags) {
+  const es = lang === 'es', T = [];
+  T.push(`${c.emo} NIIN Analytics · ${dateOf(c, lang)}\n\n${es ? 'Señal' : 'Signal'}: ${c.sigTxt}\nZ-Score: ${fnum(c.z, 2)}σ · VIX ${fnum(c.vix)}\nHMM: ${hmmName(c, lang)}\n${es ? 'Exposición' : 'Exposure'}: ${pct(c.risk)} ${es ? 'riesgo' : 'risk'}\n\n🧵👇`);
+  if (S.matriz) {
+    const n = c.alertas.length;
+    T.push(`🧭 ${es ? 'Matriz macro' : 'Macro matrix'}: ${n}/${c.matriz.length} ${es ? 'alertas' : 'alerts'}${n ? ' → ' + c.alertas.join(', ') : ''}\n${es ? 'Umbrales dinámicos por percentil, recalculados a diario.' : 'Dynamic percentile thresholds, refreshed daily.'}${c.divActive ? (es ? `\nDivergencia macro-señal: presión ${c.divPressure}.` : `\nMacro-signal divergence: ${c.divPressure} pressure.`) : ''}`);
+  }
+  if (S.analogos && c.top.date) {
+    T.push(`🧠 ${es ? 'Análogo dominante (KNN' : 'Dominant analog (KNN'} ${fnum(c.knn, 2)}): ${c.top.date}\n"${c.top.reference}"\n+90 ${es ? 'sesiones reales' : 'real sessions'}: ${signPct(c.topR.retorno_90d)}\n${es ? 'Distribución' : 'Distribution'}: ${c.trendTxt(lang)}`);
+  }
+  if (S.accuracy) {
+    T.push(`📊 ${es ? 'Track record en vivo' : 'Live track record'}: ${c.hits}/${c.accDays} (${fnum(c.accScore, 1)}%)\n${es ? 'Racha' : 'Streak'} ${c.streak} · máx ${c.maxStreak}\n${es ? 'Publicado a diario, sin cherry-picking.' : 'Published daily, no cherry-picking.'}`);
+  }
+  T.push(`${es ? 'Dictamen' : 'Verdict'}: ${c.msg}\n\n🔗 ${url}\n\n${S.disclaimer ? DISC[lang] + '\n' : ''}${tags}`);
+  return T;
+}
+
+function xDeep(c, lang, S, url, tags) {
+  const es = lang === 'es', T = [];
+  T.push(`${c.emo} NIIN · ${es ? 'Análisis extendido' : 'Deep dive'} · ${dateOf(c, lang)}\n\nSPX ${fnum(c.spx, 0)} · Z ${fnum(c.z, 2)}σ · VIX ${fnum(c.vix)}\nHMM: ${hmmName(c, lang)} · P(${es ? 'estrés' : 'stress'} 7d) ${pct(c.trans7d[2], 1)}\n\n🧵👇`);
+  if (S.matriz) {
+    const rows = c.matriz.slice(0, 4).map(r => `${estadoIcon(r.estado)} ${r.nombre}: ${fnum(r.precio)} / P${r.percentil} ${fnum(r.limite_dinamico)}`).join('\n');
+    T.push(`🧭 ${es ? 'Matriz macro' : 'Macro matrix'}:\n${rows}`);
+  }
+  if (S.analogos) {
+    const rows = c.analogs.slice(0, 3).map(a => `${a.date}: 90d ${signPct(a.analog_returns?.retorno_90d)}`).join('\n');
+    T.push(`🧠 ${es ? 'Análogos KNN (conf.' : 'KNN analogs (conf.'} ${fnum(c.knn, 2)}):\n${rows}\n${es ? 'Distancia' : 'Distance'}: Mahalanobis+corr 50/50`);
+  }
+  if (S.sectores && c.sectors.length) {
+    const rows = c.sectors.slice(0, 3).map(s => `${estadoIcon(s.nivel)} ${s.sector} · ${fnum(s.score, 0)}`).join('\n');
+    T.push(`🏭 ${es ? 'Presión sectorial (top 3)' : 'Sector pressure (top 3)'}:\n${rows}`);
+  }
+  if (S.performance) {
+    T.push(`📐 Backtest ${c.period}:\nCAGR ${c.cagr} (bench ${c.bench})\nSharpe ${c.sharpe} · maxDD ${c.maxDD}\n${fnum(c.sessions, 0)} ${es ? 'sesiones' : 'sessions'} · alpha ${c.alpha}`);
+  }
+  if (S.accuracy) {
+    T.push(`📊 ${es ? 'En vivo' : 'Live'}: ${c.hits}/${c.accDays} (${fnum(c.accScore, 1)}%)\nVIX ${es ? 'medio en aciertos' : 'avg on hits'} ${fnum(c.vixHit)} vs ${fnum(c.vixMiss)} ${es ? 'en fallos' : 'on misses'}.`);
+  }
+  T.push(`${es ? 'Dictamen' : 'Verdict'}: ${c.msg}\n🔗 ${url}\n${S.disclaimer ? DISC[lang] + '\n' : ''}${tags}`);
+  return T;
+}
+
+function xTrack(c, lang, S, url, tags) {
+  const es = lang === 'es', T = [];
+  T.push(`📊 ${es ? 'Track record NIIN, sin maquillaje' : 'NIIN track record, unvarnished'} · ${dateOf(c, lang)}\n\n${c.hits} ${es ? 'aciertos' : 'hits'} · ${c.miss} ${es ? 'fallos' : 'misses'} · ${fnum(c.accScore, 1)}%\n${c.accDays} ${es ? 'sesiones evaluadas' : 'sessions scored'}\n\n🧵👇`);
+  T.push(`${es ? 'Métrica: postura de ayer vs retorno real del SPX hoy. Automática, diaria, sin selección.' : "Metric: yesterday's stance vs today's realised SPX return. Automatic, daily, no selection."}\n${es ? 'Racha' : 'Streak'}: ${c.streak} · máx ${c.maxStreak}${(c.stanceCounts && Object.keys(c.stanceCounts).length === 1) ? (es ? '\\nTodas con postura ' + Object.keys(c.stanceCounts)[0].replace('_','-') + ' — sin señal defensiva evaluada aún.' : '\\nAll under a ' + Object.keys(c.stanceCounts)[0].replace('_','-') + ' stance — no defensive signal tested yet.') : ''}`);
+  T.push(`🔍 ${es ? 'Dónde falla' : 'Where it fails'}:\nVIX ${es ? 'medio en fallos' : 'avg on misses'}: ${fnum(c.vixMiss)}\nVIX ${es ? 'medio en aciertos' : 'avg on hits'}: ${fnum(c.vixHit)}\n${es ? 'El estrés agudo sigue siendo el régimen difícil. Y se publica igual.' : 'Acute stress remains the hard regime. Published anyway.'}`);
+  T.push(`${es ? 'Si el track record sale solo del pipeline, no hay sesgo de supervivencia posible.' : 'When the track record comes straight out of the pipeline, survivorship bias is impossible.'}\n\n🔗 ${url}\n${S.disclaimer ? DISC[lang] + '\n' : ''}${tags}`);
+  return T;
+}
+
+function xBuild(c, lang, S, url, tags) {
+  const es = lang === 'es', T = [];
+  T.push(`🛠️ ${es ? 'Construí un sistema cuant de gestión de riesgo que corre solo cada día y publica todo su output.' : 'I built a quant risk system that runs itself daily and publishes all of its output.'}\n\nNIIN Analytics v${c.version}\n\n${es ? 'Cómo funciona' : 'How it works'} 🧵👇`);
+  T.push(`⚙️ ${es ? 'Motor' : 'Engine'}: Python\n▸ KNN (Mahalanobis+corr)\n▸ HMM ${es ? 'gaussiano real, 3 estados' : 'real Gaussian, 3-state'}\n▸ Z-Score EWM / VIX\n▸ ${es ? 'Matriz macro' : 'Macro matrix'}: ${c.matriz.length} ${es ? 'activos, umbrales P-dinámicos' : 'assets, dynamic P-thresholds'}`);
+  T.push(`🔁 Pipeline:\nGitHub Actions · cron 21:30 UTC\n→ JSON ${es ? 'auditado' : 'audited'} (SHA-256: ${c.hash}…)\n→ ${es ? 'repo público de datos' : 'public data repo'}\n→ dashboard React/TS ${es ? 'en' : 'on'} Vercel\n\n${c.flagsPass}/${c.flagsTotal} audit flags PASS`);
+  T.push(`📐 ${es ? 'Principios' : 'Principles'}:\n1. ${es ? 'Se publica el output, nunca el código' : 'Publish the output, never the code'}\n2. ${es ? 'Track record diario con fallos' : 'Daily track record, misses included'} (${fnum(c.accScore, 1)}%)\n3. ${es ? 'Cero intervención manual' : 'Zero manual intervention'}`);
+  T.push(`${es ? 'Señal de hoy' : "Today's signal"}: ${c.emo} ${c.sigTxt}\n${c.msg}\n\n🔗 ${url}\n${S.disclaimer ? DISC[lang] + '\n' : ''}${tags}`);
+  return T;
+}
+
+/* ---------- X single ---------- */
+function xSingle(c, lang, S, url, tags) {
+  const es = lang === 'es';
+  return [`${c.emo} NIIN Analytics · ${dateOf(c, lang)}\n${c.sigTxt} · Z ${fnum(c.z, 2)}σ · VIX ${fnum(c.vix)} · HMM ${hmmName(c, lang)}\n${es ? 'Track record' : 'Live record'}: ${c.hits}/${c.accDays} (${fnum(c.accScore, 1)}%)\n🔗 ${url}\n${tags}`];
+}
+
+const BUILDERS = {
+  linkedin: { daily: liDaily, deep: liDeep, track: liTrack, build: liBuild },
+  xthread: { daily: xDaily, deep: xDeep, track: xTrack, build: xBuild },
+  xsingle: { daily: xSingle, deep: xSingle, track: xSingle, build: xSingle },
+};
+
+/* ==================== DOM ==================== */
+if (typeof document !== 'undefined') {
+
+  const state = {
+    data: { es: DEFAULT_DATA, en: (typeof DEFAULT_DATA_EN !== 'undefined' ? DEFAULT_DATA_EN : null) },
+    src: { es: 'DEMO', en: (typeof DEFAULT_DATA_EN !== 'undefined' ? 'DEMO' : '—') },
+    platform: 'linkedin', lang: 'es', tmpl: 'daily', icons: 'full',
+    S: { regimen: true, matriz: true, analogos: true, sectores: true, accuracy: true, performance: true, disclaimer: true, gancho: true, linkcomment: true },
+  };
+
+  const SECS = [
+    ['regimen', 'Régimen · Z-Score'], ['matriz', 'Matriz macro'], ['analogos', 'Análogos KNN'],
+    ['sectores', 'Exposición sectorial'], ['accuracy', 'Track record'], ['performance', 'Performance 19Y'],
+    ['disclaimer', 'Disclaimer'], ['gancho', 'Gancho de apertura'], ['linkcomment', 'Link → 1er comentario'],
+  ];
+
+  const $ = id => document.getElementById(id);
+
+  function curData() { return state.data[state.lang] || state.data.es; }
+  function isFallback() { return !state.data[state.lang]; }
+  function detectLang(d) {
+    const probe = ((d.action_node && d.action_node.message) || '') + ' ' + (d.deep_analysis || '') + ' ' + ((d.dictamen_cuantitativo && d.dictamen_cuantitativo.SINTESIS_ESTRATEGICA) || '');
+    return /[ÁÉÍÓÚÑáéíóúñ]|EXPOSICI|MANTENER|RIESGO/.test(probe) ? 'es' : 'en';
+  }
+
+  function saveState() {
+    try { localStorage.setItem('niin_studio_state', JSON.stringify({
+      platform: state.platform, lang: state.lang, tmpl: state.tmpl, icons: state.icons, S: state.S
+    })); } catch (e) {}
+  }
+  function syncSeg(id, v) {
+    $(id).querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
+  }
+  function srcBadge() { $('src-badge').textContent = 'ES:' + state.src.es + ' · EN:' + state.src.en; }
+
+
+  function sanitizeJSON(txt) { return JSON.parse(txt.replace(/\bNaN\b/g, 'null')); }
+
+  function setStatus(msg, ok) {
+    const el = $('status');
+    el.textContent = (ok ? '▮ ' : '✕ ') + msg;
+    el.className = ok ? 'st-ok' : 'st-err';
+  }
+
+  function tape() {
+    const c = extract(curData());
+    const sigCls = c.signal === 'RISK_ON' ? 'sig-safe' : c.signal === 'RISK_OFF' ? 'sig-crit' : 'sig-caut';
+    $('tape').innerHTML = [
+      ['SIGNAL', `<span class="${sigCls}">${c.sigTxt} <span class="blink">▮</span></span>`],
+      ['Z-EWM', `${fnum(c.z, 3)}σ`],
+      ['VIX', fnum(c.vix)],
+      ['HMM', (state.lang === 'en' ? HMM_EN : HMM_ES)[c.hmm] || c.hmm],
+      ['KNN', fnum(c.knn, 3)],
+      ['LIVE ACC', `${fnum(c.accScore, 1)}%`],
+      ['RUN', c.fecha],
+    ].map(([k, v]) => `<div class="chip"><span class="k">${k}</span><span class="v">${v}</span></div>`).join('');
+  }
+
+  function buildSecs() {
+    $('secs').innerHTML = SECS.map(([k, name]) =>
+      `<div class="tog ${state.S[k] ? 'on' : ''}" data-k="${k}"><span>${name}</span><div class="sw"></div></div>`).join('');
+    $('secs').querySelectorAll('.tog').forEach(t => t.onclick = () => {
+      const k = t.dataset.k; state.S[k] = !state.S[k];
+      t.classList.toggle('on', state.S[k]); saveState(); render();
+    });
+  }
+
+  function segWire(id, key) {
+    $(id).querySelectorAll('button').forEach(b => b.onclick = () => {
+      $(id).querySelectorAll('button').forEach(x => x.classList.remove('on'));
+      b.classList.add('on'); state[key] = b.dataset.v; saveState(); tape(); render();
+    });
+  }
+
+  const TMPL_NAME = { daily: 'Señal diaria', deep: 'Análisis extendido', track: 'Track record', build: 'Build in public' };
+  const PLAT_NAME = { linkedin: 'LinkedIn', xthread: 'X · Hilo', xsingle: 'X · Único' };
+
+  function countBadge(len, limit) {
+    const cls = len > limit ? 'over' : len > limit * 0.93 ? 'warn' : 'ok';
+    return `<span class="count ${cls}">${len} / ${limit}</span>`;
+  }
+
+  function render() {
+    const c = extract(curData());
+    const url = $('dashurl').value.trim() || 'https://niin-analytics.vercel.app';
+    const tags = $('tags').value.trim();
+    const out = BUILDERS[state.platform][state.tmpl](c, state.lang, state.S, url, tags);
+    let parts = Array.isArray(out) ? out : [out];
+    parts = parts.map(p => applyIconMode(p, state.icons, c, state.lang));
+    const isX = state.platform !== 'linkedin';
+    if (!isX && state.S.linkcomment) parts = splitLinkComment(parts[0], url, state.lang, c);
+    const limits = parts.map((p, i) => isX ? 280 : (i === 0 ? 3000 : 1250));
+
+    $('out-title').textContent = `OUTPUT · ${PLAT_NAME[state.platform].toUpperCase()} · ${TMPL_NAME[state.tmpl].toUpperCase()}`;
+    const total = parts.reduce((s, p) => s + (isX ? xLen(p) : p.length), 0);
+    $('out-count').outerHTML = isX
+      ? `<span class="count ok" id="out-count">${parts.length} tweet${parts.length > 1 ? 's' : ''} · ${total} chars</span>`
+      : `<span class="count ${parts[0].length > 3000 ? 'over' : 'ok'}" id="out-count">${parts[0].length} / 3000 chars</span>`;
+
+    $('cards').innerHTML = parts.map((p, i) => {
+      const len = isX ? xLen(p) : p.length;
+      const tag = isX && parts.length > 1 ? `TWEET_${String(i + 1).padStart(2, '0')} / ${String(parts.length).padStart(2, '0')}`
+                : (!isX && parts.length > 1) ? (i === 0 ? 'POST' : 'COMENTARIO_01') : 'POST';
+      return `<div class="card">
+        <div class="card-h">
+          <span class="tag">${tag}</span>
+          <span class="name">${PLAT_NAME[state.platform]}</span>
+          <span class="spacer"></span>
+          ${countBadge(len, limits[i])}
+          <button class="copy" data-i="${i}">Copiar</button>
+        </div>
+        <textarea data-i="${i}" data-limit="${limits[i]}" spellcheck="false">${p.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</textarea>
+      </div>`;
+    }).join('');
+
+    $('cards').querySelectorAll('textarea').forEach(t => {
+      const fit = () => { t.style.height = 'auto'; t.style.height = (t.scrollHeight + 4) + 'px'; };
+      fit(); t.addEventListener('input', () => {
+        fit();
+        const len = isX ? xLen(t.value) : t.value.length;
+        t.closest('.card').querySelector('.count').outerHTML = countBadge(len, parseInt(t.dataset.limit, 10));
+        revalidate();
+      });
+    });
+    lastCtx = { isX, limits };
+    paintChecks(parts);
+    $('cards').querySelectorAll('.copy').forEach(b => b.onclick = () => {
+      const ta = $('cards').querySelector(`textarea[data-i="${b.dataset.i}"]`);
+      copyText(ta.value).then(() => {
+        b.textContent = '✓ Copiado'; b.classList.add('done');
+        setTimeout(() => { b.textContent = 'Copiar'; b.classList.remove('done'); }, 1600);
+      });
+    });
+  }
+
+
+
+  function copyText(txt) {
+    if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(txt);
+    return new Promise((res, rej) => {                 // fallback file:// y HTTP
+      const ta = document.createElement('textarea');
+      ta.value = txt; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.focus(); ta.select();
+      try { document.execCommand('copy') ? res() : rej(new Error('copy')); }
+      catch (e) { rej(e); } finally { ta.remove(); }
+    });
+  }
+
+
+  function splitLinkComment(body, url, lang, cc) {
+    const lines = body.split('\n');
+    const idx = lines.findIndex(l => l.includes(url));
+    if (idx === -1) return [body];
+    lines.splice(idx, 1);
+    while (idx > 0 && idx <= lines.length - 1 && lines[idx - 1] === '' && lines[idx] === '') lines.splice(idx, 1);
+    if (idx === lines.length && lines[idx - 1] === '') lines.splice(idx - 1, 1);
+    let comment = lang === 'es'
+      ? `🔗 Dashboard en vivo — señal, matriz macro y track record completos, actualizados a diario: ${url}`
+      : `🔗 Live dashboard — full signal, macro matrix and daily track record: ${url}`;
+    comment = applyIconMode(comment, state.icons, cc, lang);
+    return [lines.join('\n'), comment];
+  }
+
+  let lastCtx = { isX: false, limits: [3000] };
+  function runChecks(parts) {
+    const { isX, limits } = lastCtx;
+    const joined = parts.join('\n');
+    const lens = parts.map(p => isX ? xLen(p) : p.length);
+    const overN = lens.filter((l, i) => l > limits[i]).length;
+    const nearN = lens.filter((l, i) => l > limits[i] * 0.93).length;
+    const es = state.lang === 'es';
+    const C = [];
+    C.push({ k: es ? 'LONGITUD' : 'LENGTH',
+      s: overN ? 'bad' : nearN ? 'warn' : 'ok',
+      d: isX ? `max ${Math.max(...lens)}/280` : `${lens[0]}/3000${lens.length > 1 ? ` · com ${lens[1]}/1250` : ''}` });
+    if (!isX) {
+      const fold = (parts[0].split('\n\n')[0] || '').length;
+      C.push({ k: 'FOLD', s: fold <= 210 ? 'ok' : 'warn', d: `${fold}/210` });
+    }
+    C.push({ k: 'URL', s: /https?:\/\//.test(joined) ? 'ok' : 'warn', d: /https?:\/\//.test(joined) ? '✓' : (es ? 'sin enlace' : 'missing') });
+    const d0 = curData();
+    let dd = null; try { dd = Math.floor((Date.now() - new Date(d0.timestamp).getTime()) / 864e5); } catch (e) {}
+    C.push({ k: es ? 'DATOS' : 'DATA',
+      s: dd === 0 ? 'ok' : dd === 1 ? 'warn' : 'bad',
+      d: dd === 0 ? (es ? 'HOY' : 'TODAY') : dd === 1 ? (es ? 'AYER' : '1D OLD') : `${dd ?? '?'}D` });
+    const gaps = /\bNaN\b|\bundefined\b/.test(joined) || /[^\w]— (?:vs|\/)/.test(joined);
+    C.push({ k: es ? 'CAMPOS' : 'FIELDS', s: gaps ? 'warn' : 'ok', d: gaps ? (es ? 'huecos' : 'gaps') : '✓' });
+    C.push({ k: es ? 'FUENTE' : 'SOURCE',
+      s: isFallback() ? 'warn' : 'ok',
+      d: isFallback() ? (es ? 'EN sin datos → ES' : 'no EN data → ES') : `${state.lang.toUpperCase()} ${state.src[state.lang]}` });
+    if (isX) C.push({ k: 'TWEETS', s: parts.length <= 25 ? 'ok' : 'bad', d: `${parts.length}` });
+    return C;
+  }
+  function paintChecks(parts) {
+    const C = runChecks(parts);
+    const worst = C.some(c => c.s === 'bad') ? 'bad' : C.some(c => c.s === 'warn') ? 'warn' : 'ok';
+    const es = state.lang === 'es';
+    const label = worst === 'ok' ? (es ? '✓ LISTO PARA PUBLICAR' : '✓ READY TO PUBLISH')
+                : worst === 'warn' ? (es ? '△ REVISAR AVISOS' : '△ REVIEW WARNINGS')
+                : (es ? '✕ CORREGIR ANTES DE PUBLICAR' : '✕ FIX BEFORE PUBLISHING');
+    $('valbar').innerHTML = C.map(c => `<span class="vc ${c.s}">${c.k} <b>${c.d}</b></span>`).join('')
+      + `<span class="vready ${worst}">${label}</span>`;
+  }
+  function revalidate() {
+    const parts = [...$('cards').querySelectorAll('textarea')].map(t => t.value);
+    if (parts.length) paintChecks(parts);
+  }
+
+  window.render = render;
+
+  window.copyAll = btn => {
+    const parts = [...$('cards').querySelectorAll('textarea')].map(t => t.value);
+    const sep = state.platform === 'xthread' ? '\n\n———\n\n' : '\n\n';
+    copyText(parts.join(sep)).then(() => {
+      btn.textContent = '✓ Copiado'; setTimeout(() => btn.textContent = 'Copiar todo', 1600);
+    });
+  };
+
+  function ingest(txt, srcName, hint, quiet) {
+    try {
+      const d = sanitizeJSON(txt);
+      if (!d.risk_status && !d.metrics) throw new Error('estructura no reconocida');
+      const slot = hint || detectLang(d);
+      state.data[slot] = d;
+      state.src[slot] = srcName;
+      srcBadge();
+      if (!quiet) setStatus(`niin_live${slot === 'en' ? '_en' : ''}.json → slot ${slot.toUpperCase()} · run ${extract(d).fecha}`, true);
+      tape(); render();
+      return slot;
+    } catch (e) { if (!quiet) setStatus('JSON inválido: ' + e.message, false); return null; }
+  }
+
+  function normalizeRawUrl(u) {
+    // github.com/user/repo/blob/main/x.json → raw.githubusercontent.com/user/repo/main/x.json
+    const m = u.match(/^https?:\/\/github\.com\/([^\/]+)\/([^\/]+)\/(?:blob|raw)\/(.+)$/i);
+    return m ? `https://raw.githubusercontent.com/${m[1]}/${m[2]}/${m[3].replace(/[?#].*$/, '')}` : u;
+  }
+  window.loadUrl = async () => {
+    let u = $('url').value.trim();
+    if (!u) { setStatus('Introduce una URL raw del JSON', false); return; }
+    u = normalizeRawUrl(u);
+    $('url').value = u;                                   // muestra la URL corregida
+    setStatus('Descargando…', true);
+    const pair = /_en\.json$/i.test(u) ? [u, u.replace(/_en\.json$/i, '.json')]
+               : /\.json$/i.test(u)    ? [u, u.replace(/\.json$/i, '_en.json')]
+               : [u];
+    const got = [];
+    for (const link of pair) {
+      try {
+        const r = await fetch(link);
+        if (!r.ok) continue;                                  // la pareja es opcional
+        const slot = ingest(await r.text(), 'LIVE', /_en\./i.test(link) ? 'en' : null, true);
+        if (slot) got.push(slot.toUpperCase());
+      } catch (e) { /* pareja no disponible: seguimos */ }
+    }
+    if (got.length) {
+      setStatus(`Cargados ${got.sort().join(' + ')} (LIVE) · run ${extract(curData()).fecha}`, true);
+      try { localStorage.setItem('niin_studio_url', u); } catch (e) { /* entorno sin storage: sin problema */ }
+    } else setStatus('Fetch falló (CORS, red o URL)', false);
+  };
+  window.loadPaste = () => {
+    const t = $('paste').value.trim();
+    if (!t) { setStatus('El área de pegado está vacía', false); return; }
+    ingest(t, 'PASTE');
+  };
+  $('file').addEventListener('change', e => {
+    const files = [...e.target.files]; if (!files.length) return;
+    const got = []; let pending = files.length;
+    files.forEach(f => {
+      const r = new FileReader();
+      r.onload = () => {
+        const slot = ingest(r.result, 'FILE', /_en\b|_en\./i.test(f.name) ? 'en' : null, true);
+        if (slot) got.push(slot.toUpperCase());
+        if (--pending === 0) setStatus(got.length
+          ? `Cargados ${[...new Set(got)].sort().join(' + ')} (FILE) · run ${extract(curData()).fecha}`
+          : 'Archivos inválidos', got.length > 0);
+      };
+      r.readAsText(f);
+    });
+    e.target.value = '';
+  });
+
+  segWire('platform', 'platform');
+  segWire('lang', 'lang');
+  segWire('icons', 'icons');
+  $('tmpl').querySelectorAll('button').forEach(b => b.onclick = () => {
+    $('tmpl').querySelectorAll('button').forEach(x => x.classList.remove('on'));
+    b.classList.add('on'); state.tmpl = b.dataset.v; saveState(); render();
+  });
+  const persist = (id, key) => $(id).addEventListener('change', () => {
+    try { localStorage.setItem(key, $(id).value); } catch (e) {}
+    render();
+  });
+  persist('dashurl', 'niin_studio_dashurl');
+  persist('tags', 'niin_studio_tags');
+
+  try {
+    const saved = localStorage.getItem('niin_studio_url');
+    if (saved) { $('url').value = saved; setStatus('▮ URL recordada de la última sesión — pulsa Fetch', true); }
+    const du = localStorage.getItem('niin_studio_dashurl'); if (du) $('dashurl').value = du;
+    const tg = localStorage.getItem('niin_studio_tags'); if (tg !== null) $('tags').value = tg;
+  } catch (e) { /* entorno sin storage: valores por defecto */ }
+  try {
+    const st = JSON.parse(localStorage.getItem('niin_studio_state') || 'null');
+    if (st) {
+      if (st.platform) state.platform = st.platform;
+      if (st.lang) state.lang = st.lang;
+      if (st.tmpl) state.tmpl = st.tmpl;
+      if (st.icons) state.icons = st.icons;
+      if (st.S) Object.assign(state.S, st.S);
+      syncSeg('platform', state.platform);
+      syncSeg('lang', state.lang);
+      syncSeg('icons', state.icons);
+      syncSeg('tmpl', state.tmpl);
+    }
+  } catch (e) { /* sin storage o estado corrupto: arranque estándar */ }
+  buildSecs(); srcBadge(); tape(); render();
+}
+
+/* node test hook */
+if (typeof module !== 'undefined') module.exports = { extract, BUILDERS, xLen, applyIconMode };
+
+</script>
+</body>
+</html>
