@@ -419,10 +419,20 @@ function extract(d) {
 }
 
 /* ---------- shared strings ---------- */
-const DISC = {
-  es: '⚠️ Output de sistema cuantitativo. No es asesoramiento financiero.',
-  en: '⚠️ Quantitative system output. Not financial advice.',
+// Disclaimer legal — texto aprobado. Dos versiones: media (LinkedIn) y micro (X).
+// Sin emoji ⚠️: algunos canales no lo renderizan bien (marcador de texto en su lugar).
+// El enlace a la divulgación completa es lo que hace defendibles las versiones cortas.
+const DISC_URL = 'niin-analytics.vercel.app';
+const DISC_MEDIA = {
+  es: `AVISO: Output automatizado de sistema cuantitativo, con fines informativos. No es asesoramiento de inversión ni recomendación (autor no supervisado por CNMV). Rendimientos pasados no garantizan resultados futuros; cifras de AUM ilustrativas. Divulgación completa: ${DISC_URL}`,
+  en: `NOTICE: Automated quantitative system output, for information only. Not investment advice or a recommendation (author not CNMV-supervised). Past performance is no guarantee of future results; AUM figures illustrative. Full disclosure: ${DISC_URL}`,
 };
+const DISC_MICRO = {
+  es: `AVISO: sistema automatizado · solo informativo · no es asesoramiento · rendimientos pasados no garantizan futuros · +info: ${DISC_URL}`,
+  en: `NOTICE: automated system · info only · not investment advice · past performance no guarantee · more: ${DISC_URL}`,
+};
+// Compatibilidad: DISC por defecto = media (los builders de LinkedIn lo usan directamente).
+const DISC = DISC_MEDIA;
 function hmmName(c, lang) { return (lang === 'en' ? HMM_EN : HMM_ES)[c.hmm] || c.hmm; }
 function dateOf(c, lang) { return lang === 'en' ? c.fechaEn : c.fecha; }
 function matrizLines(c, lang) {
@@ -676,7 +686,7 @@ function xDaily(c, lang, S, url, tags) {
   if (S.accuracy) {
     T.push(`📊 ${es ? 'Track record en vivo' : 'Live track record'}: ${c.hits}/${c.accDays} (${fnum(c.accScore, 1)}%)\n${es ? 'Racha' : 'Streak'} ${c.streak} · máx ${c.maxStreak}\n${es ? 'Publicado a diario, sin cherry-picking.' : 'Published daily, no cherry-picking.'}`);
   }
-  T.push(`${es ? 'Dictamen' : 'Verdict'}: ${c.msg}\n\n🔗 ${url}\n\n${S.disclaimer ? DISC[lang] + '\n' : ''}${tags}`);
+  T.push(`${es ? 'Dictamen' : 'Verdict'}: ${c.msg}\n\n🔗 ${url}\n\n${S.disclaimer ? DISC_MICRO[lang] + '\n' : ''}${tags}`);
   return T;
 }
 
@@ -701,7 +711,7 @@ function xDeep(c, lang, S, url, tags) {
   if (S.accuracy) {
     T.push(`📊 ${es ? 'En vivo' : 'Live'}: ${c.hits}/${c.accDays} (${fnum(c.accScore, 1)}%)\nVIX ${es ? 'medio en aciertos' : 'avg on hits'} ${fnum(c.vixHit)} vs ${fnum(c.vixMiss)} ${es ? 'en fallos' : 'on misses'}.`);
   }
-  T.push(`${es ? 'Dictamen' : 'Verdict'}: ${c.msg}\n🔗 ${url}\n${S.disclaimer ? DISC[lang] + '\n' : ''}${tags}`);
+  T.push(`${es ? 'Dictamen' : 'Verdict'}: ${c.msg}\n🔗 ${url}\n${S.disclaimer ? DISC_MICRO[lang] + '\n' : ''}${tags}`);
   return T;
 }
 
@@ -710,7 +720,7 @@ function xTrack(c, lang, S, url, tags) {
   T.push(`📊 ${es ? 'Track record NIIN, sin maquillaje' : 'NIIN track record, unvarnished'} · ${dateOf(c, lang)}\n\n${c.hits} ${es ? 'aciertos' : 'hits'} · ${c.miss} ${es ? 'fallos' : 'misses'} · ${fnum(c.accScore, 1)}%\n${c.accDays} ${es ? 'sesiones evaluadas' : 'sessions scored'}\n\n🧵👇`);
   T.push(`${es ? 'Métrica: postura de ayer vs retorno real del SPX hoy. Automática, diaria, sin selección.' : "Metric: yesterday's stance vs today's realised SPX return. Automatic, daily, no selection."}\n${es ? 'Racha' : 'Streak'}: ${c.streak} · máx ${c.maxStreak}${(c.stanceCounts && Object.keys(c.stanceCounts).length === 1) ? (es ? '\\nTodas con postura ' + Object.keys(c.stanceCounts)[0].replace('_','-') + ' — sin señal defensiva evaluada aún.' : '\\nAll under a ' + Object.keys(c.stanceCounts)[0].replace('_','-') + ' stance — no defensive signal tested yet.') : ''}`);
   T.push(`🔍 ${es ? 'Dónde falla' : 'Where it fails'}:\nVIX ${es ? 'medio en fallos' : 'avg on misses'}: ${fnum(c.vixMiss)}\nVIX ${es ? 'medio en aciertos' : 'avg on hits'}: ${fnum(c.vixHit)}\n${es ? 'El estrés agudo sigue siendo el régimen difícil. Y se publica igual.' : 'Acute stress remains the hard regime. Published anyway.'}`);
-  T.push(`${es ? 'Si el track record sale solo del pipeline, no hay sesgo de supervivencia posible.' : 'When the track record comes straight out of the pipeline, survivorship bias is impossible.'}\n\n🔗 ${url}\n${S.disclaimer ? DISC[lang] + '\n' : ''}${tags}`);
+  T.push(`${es ? 'Si el track record sale solo del pipeline, no hay sesgo de supervivencia posible.' : 'When the track record comes straight out of the pipeline, survivorship bias is impossible.'}\n\n🔗 ${url}\n${S.disclaimer ? DISC_MICRO[lang] + '\n' : ''}${tags}`);
   return T;
 }
 
@@ -720,7 +730,7 @@ function xBuild(c, lang, S, url, tags) {
   T.push(`⚙️ ${es ? 'Motor' : 'Engine'}: Python\n▸ KNN (Mahalanobis+corr)\n▸ HMM ${es ? 'gaussiano real, 3 estados' : 'real Gaussian, 3-state'}\n▸ Z-Score EWM / VIX\n▸ ${es ? 'Matriz macro' : 'Macro matrix'}: ${c.matriz.length} ${es ? 'activos, umbrales P-dinámicos' : 'assets, dynamic P-thresholds'}`);
   T.push(`🔁 Pipeline:\nGitHub Actions · cron 21:30 UTC\n→ JSON ${es ? 'auditado' : 'audited'} (SHA-256: ${c.hash}…)\n→ ${es ? 'repo público de datos' : 'public data repo'}\n→ dashboard React/TS ${es ? 'en' : 'on'} Vercel\n\n${c.flagsPass}/${c.flagsTotal} audit flags PASS`);
   T.push(`📐 ${es ? 'Principios' : 'Principles'}:\n1. ${es ? 'Se publica el output, nunca el código' : 'Publish the output, never the code'}\n2. ${es ? 'Track record diario con fallos' : 'Daily track record, misses included'} (${fnum(c.accScore, 1)}%)\n3. ${es ? 'Cero intervención manual' : 'Zero manual intervention'}`);
-  T.push(`${es ? 'Señal de hoy' : "Today's signal"}: ${c.emo} ${c.sigTxt}\n${c.msg}\n\n🔗 ${url}\n${S.disclaimer ? DISC[lang] + '\n' : ''}${tags}`);
+  T.push(`${es ? 'Señal de hoy' : "Today's signal"}: ${c.emo} ${c.sigTxt}\n${c.msg}\n\n🔗 ${url}\n${S.disclaimer ? DISC_MICRO[lang] + '\n' : ''}${tags}`);
   return T;
 }
 
@@ -749,7 +759,7 @@ if (typeof document !== 'undefined') {
   const SECS = [
     ['regimen', 'Régimen · Z-Score'], ['matriz', 'Matriz macro'], ['analogos', 'Análogos KNN'],
     ['sectores', 'Exposición sectorial'], ['accuracy', 'Track record'], ['performance', 'Performance 19Y'],
-    ['disclaimer', 'Disclaimer'], ['gancho', 'Gancho de apertura'], ['linkcomment', 'Link → 1er comentario'],
+    ['gancho', 'Gancho de apertura'], ['linkcomment', 'Link → 1er comentario'],
   ];
 
   const $ = id => document.getElementById(id);
@@ -1061,6 +1071,10 @@ if (typeof document !== 'undefined') {
       if (st.tmpl) state.tmpl = st.tmpl;
       if (st.icons) state.icons = st.icons;
       if (st.S) Object.assign(state.S, st.S);
+      // El disclaimer legal es obligatorio y no desactivable: se fuerza a true
+      // tras restaurar cualquier estado guardado, por si un estado anterior lo
+      // hubiera dejado en false. No hay toggle en la interfaz para cambiarlo.
+      state.S.disclaimer = true;
       syncSeg('platform', state.platform);
       syncSeg('lang', state.lang);
       syncSeg('icons', state.icons);
